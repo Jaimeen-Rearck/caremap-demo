@@ -1,6 +1,6 @@
 import { View, Text, Image, TouchableOpacity } from "react-native";
 import { Divider } from "@/components/ui/divider";
-import { Patient, User } from "@/services/database/migrations/v1/schema_v1";
+import { User, Patient } from "@/services/database/version_manager";
 import { Box } from "@/components/ui/box";
 import { router } from "expo-router";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
@@ -53,9 +53,10 @@ export default function HealthProfile() {
       if (!existingUser) {
         await userModel.insert({
           id: currentUser.id,
-
           name: currentUser.name,
           email: currentUser.email,
+          password_hash: 'GOOGLE_AUTH', // For Google-authenticated users
+          created_at: new Date().toISOString()
         });
       }
       handlePatientData(currentUser);
@@ -72,9 +73,12 @@ export default function HealthProfile() {
       if (existingPatient) {
         setPatient(existingPatient);
       } else {
+        const names = currentUser.name?.split(' ') || ['', ''];
         await patientModel.insert({
           user_id: currentUser.id,
-          name: currentUser.name,
+          first_name: names[0],
+          last_name: names.slice(1).join(' ') || names[0],
+          created_at: new Date().toISOString()
         });
         const newPatient = await patientModel.getPatientByUserId(
           currentUser.id

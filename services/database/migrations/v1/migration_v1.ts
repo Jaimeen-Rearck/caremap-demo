@@ -1,3 +1,4 @@
+import { logger } from "@/services/logging/logger";
 import { SQLiteDatabase } from "expo-sqlite";
 
 export const up = async (db: SQLiteDatabase) => {
@@ -5,7 +6,8 @@ export const up = async (db: SQLiteDatabase) => {
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
-      name TEXT
+      name TEXT,
+      picture TEXT
     );
 
     CREATE TABLE IF NOT EXISTS patients (
@@ -22,5 +24,14 @@ export const up = async (db: SQLiteDatabase) => {
     );
   `);
 
-  console.log(`Tables created.`);
+  logger.debug(`Tables created.`);
+};
+
+export const down = async (db: SQLiteDatabase) => {
+  await db.execAsync(`
+    DROP TABLE IF EXISTS patients;
+    DROP TABLE IF EXISTS users;
+  `);
+
+  logger.debug('V1 migration reverted successfully');
 };

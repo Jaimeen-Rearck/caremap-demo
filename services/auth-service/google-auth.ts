@@ -8,7 +8,7 @@ import * as Google from "expo-auth-session/providers/google";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import { User } from "../database/migrations/v1/schema_v1";
+import { User } from "../database/migrations/v2/schema_v2";
 
 
 const IOS_CLIENT_ID = googleConfig.GOOGLE_IOS_CLIENT_ID;

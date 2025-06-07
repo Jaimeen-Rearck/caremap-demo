@@ -21,7 +21,7 @@ import {
   initializeSession,
   signOut,
 } from "@/services/auth-service/google-auth";
-import { Patient, User } from "@/services/database/migrations/v1/schema_v1";
+import { Patient, User } from "@/services/database/migrations/v2/schema_v2";
 import { useSQLiteContext } from "expo-sqlite";
 import { PatientModel } from "@/services/database/models/PatientModel";
 import { useRouter } from "expo-router";

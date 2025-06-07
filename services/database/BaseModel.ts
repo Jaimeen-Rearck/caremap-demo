@@ -1,4 +1,5 @@
 import { SQLiteDatabase } from 'expo-sqlite';
+import { logger } from '../logging/logger';
 
 export abstract class BaseModel<T> {
 
@@ -12,8 +13,8 @@ export abstract class BaseModel<T> {
 
     // Wrapper method to run any SQL query safely inside a transaction using prepared statements
     protected async run(sql: string, params: any[] = []) {
-        console.log("SQL: ", sql);
-        console.log("Params: ", params);
+        logger.debug("SQL: ", sql);
+        logger.debug("Params: ", params);
         let result: any;
         await this.db.withTransactionAsync(async () => {
             const stmt = await this.db.prepareAsync(sql);

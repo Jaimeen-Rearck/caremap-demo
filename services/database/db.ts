@@ -1,29 +1,66 @@
-import { SQLITE_DB_NAME } from "@/utils/config";
-import { SQLiteDatabase } from "expo-sqlite";
-import * as v1 from './migrations/v1/migration_v1';
+import { SQLiteDatabase } from 'expo-sqlite';
+import { MigrationManager } from './migrations/manager';
 
-export const DB_NAME = SQLITE_DB_NAME;
-export const DB_VERSION = 1;
+class DatabaseService {
+  private static instance: DatabaseService;
+  private db?: SQLiteDatabase;
+  private migrationManager?: MigrationManager;
 
-export const useDatabase = (db: SQLiteDatabase) => {
+  private constructor() {}
 
-    const runMigrations = async () => {
-        const result = await db.getAllAsync<{ user_version: number }>(
-            `PRAGMA user_version;`
-        );
-        const currentVersion = result[0]?.user_version ?? 0;
+  public static getInstance(): DatabaseService {
+    if (!DatabaseService.instance) {
+      DatabaseService.instance = new DatabaseService();
+    }
+    return DatabaseService.instance;
+  }
 
-        console.log("DB version: ", currentVersion);
+  public setDatabase(db: SQLiteDatabase): void {
+    this.db = db;
+    this.migrationManager = new MigrationManager(db);
+  }
 
-        if (currentVersion < DB_VERSION) {
-            await db.withTransactionAsync(async () => {
-                if (currentVersion < 1) {
-                    await v1.up(db);
-                }
-                await db.execAsync(`PRAGMA user_version = ${DB_VERSION}`);
-            });
-        }
-    };
+  public getDatabase(): SQLiteDatabase {
+    if (!this.db) {
+      throw new Error('Database not initialized. Call setDatabase first.');
+    }
+    return this.db;
+  }
 
-    return { db, runMigrations };
+  public async initialize(): Promise<void> {
+    if (!this.migrationManager) {
+      throw new Error('Database not initialized. Call setDatabase first.');
+    }
+
+    try {
+      await this.migrationManager.migrate();
+    } catch (error) {
+      console.error('Failed to initialize database:', error);
+      throw error;
+    }
+  }
+
+  public async migrateToVersion(version: number): Promise<void> {
+    if (!this.migrationManager) {
+      throw new Error('Database not initialized. Call setDatabase first.');
+    }
+
+    try {
+      await this.migrationManager.migrate(version);
+    } catch (error) {
+      console.error(`Failed to migrate to version ${version}:`, error);
+      throw error;
+    }
+  }
+}
+
+// Current database version
+export const DB_VERSION = 2;
+
+// Database configuration
+export const DB_CONFIG = {
+  name: 'caremap.db',
+  version: DB_VERSION,  
 };
+
+export default DatabaseService;
