@@ -45,18 +45,26 @@ export class MigrationManager {
     const migrationPath = getMigrationPath(currentVersion, finalVersion);
 
     for (const migration of migrationPath) {
-      logger.debug(`Running ${finalVersion > currentVersion ? 'up' : 'down'} migration for version ${migration.version}`);
+      const isUpgrade = finalVersion > currentVersion;
+      logger.debug(`Running ${isUpgrade ? 'up' : 'down'} migration for version ${migration.version}`);
       
-      if (finalVersion > currentVersion) {
+      if (isUpgrade) {
         await migration.up(this.db);
+        await this.setVersion(migration.version);
       } else {
         await migration.down(this.db);
+        // For downgrades, set the version to the previous version
+        const targetVersionForStep = migration.version - 1;
+        await this.setVersion(targetVersionForStep);
       }
-
-      await this.setVersion(migration.version);
-      logger.debug(`Successfully migrated to version ${migration.version}`);
+      
+      logger.debug(`Successfully migrated ${isUpgrade ? 'to' : 'from'} version ${migration.version}`);
     }
+    const versionAfterMigration = await this.getCurrentVersion();
+    logger.debug(`Current database version: ${versionAfterMigration}`);
 
+    // Ensure we're at the correct final version
+    await this.setVersion(finalVersion);
     logger.debug('Migration completed successfully');
   }
-} 
+}

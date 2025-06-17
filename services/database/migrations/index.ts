@@ -28,6 +28,12 @@ export const getLatestVersion = (): number => {
   return migrations[migrations.length - 1].version;
 };
 
+/*
+ Example paths:
+  v1 -> v3: Executes [v1->v2, v2->v3]
+  v3 -> v1: Executes [v3->v2, v2->v1]
+*/ 
+
 export const getMigrationPath = (
   currentVersion: number,
   targetVersion: number
