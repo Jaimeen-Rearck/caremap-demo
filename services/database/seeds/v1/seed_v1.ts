@@ -8,7 +8,7 @@ import {
     samplePatientEmergencyCare,
     samplePatientAllergies,
     samplePatientMedications,
-    sample_data
+    samplePatientNotes
 } from "@/services/database/seeds/v1/sample_data";
 import { logger } from "@/services/logging/logger";
 
@@ -174,7 +174,7 @@ export async function seedDatabase(db: SQLiteDatabase) {
         }
 
         // Insert patient notes
-        for (const note of sample_data[tables.PATIENT_NOTE]) {
+        for (const note of samplePatientNotes) {
             if (!note.patient_id || !note.topic) continue;
             await db.execAsync(
                 `INSERT INTO ${tables.PATIENT_NOTE} (
