@@ -1,8 +1,9 @@
 import { PatientEquipment } from '@/services/database/migrations/v1/schema_v1';
 import { PatientEquipmentModel } from '@/services/database/models/PatientEquipmentModel';
 import { logger } from '@/services/logging/logger';
-import { useModel, getCurrentTimestamp } from '@/services/core/utils';
+import { getCurrentTimestamp } from '@/services/core/utils';
 import { isExistingPatientById } from '@/services/core/PatientService';
+import { useModel } from '@/services/database/BaseModel';
 
 // Single shared instance of model
 const patientEquipmentModel = new PatientEquipmentModel();

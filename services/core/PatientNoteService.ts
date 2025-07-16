@@ -1,8 +1,9 @@
 import { PatientNote } from '@/services/database/migrations/v1/schema_v1';
 import { PatientNoteModel } from '@/services/database/models/PatientNoteModel';
 import { logger } from '@/services/logging/logger';
-import { useModel, getCurrentTimestamp } from '@/services/core/utils';
+import { getCurrentTimestamp } from '@/services/core/utils';
 import { isExistingPatientById } from '@/services/core/PatientService';
+import { useModel } from '@/services/database/BaseModel';
 
 // Single shared instance of model
 const patientNoteModel = new PatientNoteModel();

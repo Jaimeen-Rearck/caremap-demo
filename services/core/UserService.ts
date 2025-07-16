@@ -1,7 +1,7 @@
 import { User } from '@/services/database/migrations/v1/schema_v1';
 import { UserModel } from '@/services/database/models/UserModel';
 import { logger } from '@/services/logging/logger';
-import { useModel } from '@/services/core/utils';
+import { useModel } from '@/services/database/BaseModel';
 
 // Single shared instance of model
 const userModel = new UserModel();

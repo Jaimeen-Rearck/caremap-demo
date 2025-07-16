@@ -1,15 +1,18 @@
-import { useDB } from '@/services/database/db';
-import { logger } from '@/services/logging/logger';
-
-// Helper function to lazily initialize a model with the DB instance.
-export async function useModel<T>(model: any, fn: (model: any) => Promise<T>): Promise<T> {
-    return useDB(async (db) => {
-        model.setDB(db);
-        return fn(model);
-    });
-}
+import { differenceInYears } from "date-fns";
 
 // Helper function to get current timestamp
 export function getCurrentTimestamp(): Date {
     return new Date();
+}
+
+// Helper function to calculate age from date
+export function calculateAge(date: Date | undefined | null): number | null {
+    if (!date) return null;
+    try {
+        const today = new Date();
+        return differenceInYears(today, date);
+    } catch (error) {
+        console.error("Error calculating age:", error);
+        return null;
+    }
 } 
