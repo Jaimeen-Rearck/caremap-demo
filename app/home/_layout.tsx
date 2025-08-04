@@ -6,7 +6,7 @@ export default function TabLayout() {
   const TrackIconActive = require("@/assets/svg/track-active.svg").default;
   const InsightIconActive = require("@/assets/svg/insight-active.svg").default;
   const CareTeamIconActive =
-    require("@/assets/svg/careteam-active.svg").default;
+    require("@/assets/svg/careTeam-active.svg").default;
 
   const MyHealthIconInActive =
     require("@/assets/svg/health-inactive.svg").default;
@@ -14,7 +14,7 @@ export default function TabLayout() {
   const InsightIconInActive =
     require("@/assets/svg/insight-inactive.svg").default;
   const CareTeamIconInActive =
-    require("@/assets//svg/careteam-inactive.svg").default;
+    require("@/assets//svg/careTeam-inactive.svg").default;
   return (
     <Tabs
       screenOptions={{
