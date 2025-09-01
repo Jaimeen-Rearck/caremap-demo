@@ -5,8 +5,9 @@ export default function TabLayout() {
   const MyHealthIconActive = require("@/assets/svg/health-active.svg").default;
   const TrackIconActive = require("@/assets/svg/track-active.svg").default;
   const InsightIconActive = require("@/assets/svg/insight-active.svg").default;
-  const CareTeamIconActive =
-    require("@/assets/svg/careteam-active.svg").default;
+  const CareTeamIconActive = require("@/assets/svg/careteam-active.svg").default;
+  const MoreIconActive = require("@/assets/svg/more-active.svg").default;
+
 
   const MyHealthIconInActive =
     require("@/assets/svg/health-inactive.svg").default;
@@ -15,21 +16,23 @@ export default function TabLayout() {
     require("@/assets/svg/insight-inactive.svg").default;
   const CareTeamIconInActive =
     require("@/assets//svg/careteam-inactive.svg").default;
+    const MoreIconInActive =
+    require("@/assets//svg/more-inactive.svg").default;
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: palette.tabIconActiveColor,
-        tabBarInactiveTintColor: palette.tabIconInactiveColor,
+        tabBarInactiveTintColor: "#FFFFFF",
 
         tabBarStyle: {
-          paddingTop: 0,
-          marginTop: 0,
+          // paddingTop: 0,
+          // marginTop: 0,
           backgroundColor: palette.tabBackgroundColor,
-          paddingHorizontal: 16,
+          paddingHorizontal: 4,
         },
         tabBarLabelStyle: {
-          fontSize: 16,
+          fontSize: 12,
           fontWeight: "600",
         },
       }}
@@ -84,6 +87,19 @@ export default function TabLayout() {
               <CareTeamIconActive width={32} height={32} />
             ) : (
               <CareTeamIconInActive width={32} height={32} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: "More",
+          href:"/home/more",
+          tabBarIcon: ({ focused }) =>
+            focused ? (
+              <MoreIconActive width={32} height={32} />
+            ) : (
+              <MoreIconInActive width={32} height={32} />
             ),
         }}
       />

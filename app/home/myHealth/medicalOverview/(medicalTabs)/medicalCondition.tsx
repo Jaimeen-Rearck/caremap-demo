@@ -1,5 +1,13 @@
 import React, { useContext, useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, FlatList } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Textarea, TextareaInput } from "@/components/ui/textarea";
 import palette from "@/utils/theme/color";
@@ -10,18 +18,19 @@ import {
   deletePatientCondition,
 } from "@/services/core/PatientConditionService";
 import { PatientContext } from "@/context/PatientContext";
-import { Keyboard, TouchableWithoutFeedback } from "react-native";
-import { Spinner } from "@/components/ui/spinner";
 import { CustomAlertDialog } from "@/components/shared/CustomAlertDialog";
 import Header from "@/components/shared/Header";
 import ActionPopover from "@/components/shared/ActionPopover";
 import { useCustomToast } from "@/components/shared/useCustomToast";
 import { PatientCondition } from "@/services/database/migrations/v1/schema_v1";
+import { logger } from "@/services/logging/logger";
 import { router } from "expo-router";
+import { CustomButton } from "@/components/shared/CustomButton";
+import { Divider } from "@/components/ui/divider";
 
-const linkedHealthSystem : string[]= [
-  // "Attention Deficient and Hyperactivity Disorder (ADHD)",
-  // "Irritable Bowel Syndrome (IBS)",
+const linkedHealthSystem: string[] = [
+  "Attention Deficient and Hyperactivity Disorder (ADHD)",
+  "Irritable Bowel Syndrome (IBS)",
 ];
 
 export default function MedicalConditions() {
@@ -31,7 +40,6 @@ export default function MedicalConditions() {
   const [editingCondition, setEditingCondition] = useState<
     PatientCondition | undefined
   >(undefined);
-  const [loading, setLoading] = useState(false);
 
   // for Alert while delete
   const [showAlertDialog, setShowAlertDialog] = useState(false);
@@ -43,17 +51,15 @@ export default function MedicalConditions() {
 
   const fetchConditions = async () => {
     if (!patient?.id) {
-      console.log("No patient id found");
+      logger.debug("No patient id found");
       return;
     }
-    setLoading(true);
+
     try {
       const conditions = await getPatientConditionsByPatientId(patient.id);
       setUserConditions(conditions);
     } catch (e) {
-      console.log(e);
-    } finally {
-      setLoading(false);
+      logger.debug(String(e));
     }
   };
 
@@ -124,7 +130,7 @@ export default function MedicalConditions() {
           .toLocaleDateString("en-US", {
             month: "2-digit",
             day: "2-digit",
-            year: "2-digit",
+            year: "numeric",
           })
           .replace(/\//g, "-")
       : "";
@@ -133,26 +139,26 @@ export default function MedicalConditions() {
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
-      <Header title="Medical Conditions"
-      right={
-                      <TouchableOpacity onPress={() => router.back()}>
-                        <Text className="text-white font-medium">Cancel</Text>
-                      </TouchableOpacity>
-                    }
-                     />
+      <Header
+        title="Medical Conditions"
+        right={
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text className="text-white font-medium">Cancel</Text>
+          </TouchableOpacity>
+        }
+      />
 
-      <View className="px-6 pt-4 flex-1">
+      <View className="px-5 pt-5 flex-1">
         {/* Linked Health System */}
-        <View className="mb-6 mt-4">
+        <View className="mb-6">
           <Text
-            className="text-lg font-semibold"
+            className="text-xl font-semibold"
             style={{ color: palette.heading }}
           >
             Medical Conditions (Linked Health System)
           </Text>
 
-          {/* hr */}
-          <View className="h-px bg-gray-300 my-3" />
+          <Divider className="bg-gray-300 my-3" />
 
           <View>
             <FlatList
@@ -164,91 +170,77 @@ export default function MedicalConditions() {
               )}
               keyExtractor={(_, index) => index.toString()}
               ListEmptyComponent={
-                <Text className="text-gray-500">
+                <Text className="text-gray-500 text-lg">
                   No user linked health system found.
                 </Text>
               }
               showsVerticalScrollIndicator={true}
               scrollEnabled={true}
-              style={{ minHeight: 50, maxHeight: 160 }}
+              style={{ minHeight: 50, maxHeight: 200 }}
             />
           </View>
         </View>
 
         {/* User Entered */}
-        <View>
+        <View className="flex-1">
           <Text
-            className="text-lg font-semibold"
+            className="text-xl font-semibold"
             style={{ color: palette.heading }}
           >
             Medical Conditions (User entered)
           </Text>
 
-          {/* hr */}
-          <View className="h-px bg-gray-300 my-3" />
+          <Divider className="bg-gray-300 my-3" />
 
-          <View>
-            {loading ? (
-              <View className="justify-center items-center min-h-[120px]">
-                <Spinner size="large" color={palette.primary} />
-                <Text className="mt-5">Loading...</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={userConditions}
-                keyExtractor={(item) => item.id.toString()}
-                scrollEnabled={true}
-                showsVerticalScrollIndicator={true}
-                renderItem={({ item }) => {
-                  const formattedDate = getFormattedConditionDate(item);
-                  return (
-                    <View className="flex-row items-center justify-between border border-gray-300 rounded-lg px-3 py-3 mb-3">
-                      <View className="flex-row items-center space-x-2">
-                        <Text className="text-lg ml-3 max-w-[220px] text-left">
-                          {item.condition_name}
-                        </Text>
-                      </View>
-                      <View className="flex-row items-center">
-                        <Text className="text-lg text-gray-500 mr-3">
-                          {formattedDate}
-                        </Text>
-                        <ActionPopover
-                          onEdit={() => {
-                            handleEdit(item);
-                          }}
-                          onDelete={() => {
-                            setConditionToDelete(item);
-                            setShowAlertDialog(true);
-                          }}
-                        />
-                      </View>
+          <View className="flex-1">
+            <FlatList
+              data={userConditions}
+              keyExtractor={(item) => item.id.toString()}
+              scrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+              renderItem={({ item }) => {
+                const formattedDate = getFormattedConditionDate(item);
+                return (
+                  <View className="flex-row items-center justify-between border border-gray-300 rounded-lg px-3 py-3 mb-3">
+                    <View className="flex-row items-center space-x-2">
+                      <Text className="text-lg ml-3 max-w-[220px] text-left">
+                        {item.condition_name}
+                      </Text>
                     </View>
-                  );
-                }}
-                ListEmptyComponent={
-                  <Text className="text-gray-500">
-                    No Medical conditions found.
-                  </Text>
-                }
-                style={{ minHeight: 50, maxHeight: 250 }}
-              />
-            )}
+                    <View className="flex-row items-center">
+                      <Text className="text-lg text-gray-500 mr-3">
+                        {formattedDate}
+                      </Text>
+                      <ActionPopover
+                        onEdit={() => {
+                          handleEdit(item);
+                        }}
+                        onDelete={() => {
+                          setConditionToDelete(item);
+                          setShowAlertDialog(true);
+                        }}
+                      />
+                    </View>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={
+                <Text className="text-gray-500 text-lg">
+                  No Medical conditions found.
+                </Text>
+              }
+              style={{ minHeight: 50 }}
+            />
           </View>
         </View>
 
-        {/* hr */}
-        <View className="h-px bg-gray-300 mb-2" />
+        <Divider className="bg-gray-300 mb-2" />
 
         {/* Add Condition Button */}
-        <TouchableOpacity
-          className="rounded-md py-3 items-center mt-1"
+        <CustomButton
+          title="Add medical condition"
           onPress={() => setShowAddForm(true)}
-          style={{ backgroundColor: palette.primary }}
-        >
-          <Text className="text-white font-medium text-lg">
-            Add medical condition
-          </Text>
-        </TouchableOpacity>
+        />
       </View>
 
       <CustomAlertDialog
@@ -298,21 +290,43 @@ function AddMedicalConditionsPage({
   );
   // console.log(condition);
 
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <SafeAreaView className="flex-1 bg-white">
-        {/* Header */}
-        <Header title="Medical Conditions"
-        right={
-                        <TouchableOpacity onPress={() => router.back()}>
-                          <Text className="text-white font-medium">Cancel</Text>
-                        </TouchableOpacity>
-                      }
-        onBackPress={onClose} />
+  const isDisabled = condition.trim().length === 0;
 
-        <View className="px-6 py-8">
+  const handleSave = () => {
+    if (isDisabled) return;
+    handleAddUpdateMedicalCondition({
+      id: editingCondition?.id,
+      condition_name: condition.trim(),
+    });
+    onClose(); // Go back to list
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-white">
+      {/* Header */}
+      <Header
+        title="Medical Conditions"
+        right={
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text className="text-white font-medium">Cancel</Text>
+          </TouchableOpacity>
+        }
+        onBackPress={onClose}
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        className="bg-white"
+        // behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={"padding"}
+        // keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      >
+        <ScrollView
+          className="px-5 pt-5 flex-1"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text
-            className="text-lg font-medium mb-3"
+            className="text-xl font-medium mb-3"
             style={{ color: palette.heading }}
           >
             {editingCondition
@@ -321,39 +335,30 @@ function AddMedicalConditionsPage({
           </Text>
 
           <Textarea
-            size="md"
+            size="lg"
             isReadOnly={false}
             isInvalid={false}
             isDisabled={false}
             className="w-full"
           >
             <TextareaInput
-              placeholder="Enter condition"
-              style={{ textAlignVertical: "top", fontSize: 16 }}
+              placeholder="Enter condition..."
+              textAlignVertical="top"
               value={condition}
               onChangeText={setCondition}
             />
           </Textarea>
+        </ScrollView>
 
-          <TouchableOpacity
-            className="py-3 rounded-md mt-3"
-            style={{ backgroundColor: palette.primary }}
-            onPress={() => {
-              if (condition.trim()) {
-                handleAddUpdateMedicalCondition({
-                  id: editingCondition?.id,
-                  condition_name: condition.trim(),
-                });
-              }
-              onClose(); // Go back to list
-            }}
-          >
-            <Text className="text-white font-bold text-center">
-              {editingCondition ? "Update" : "Save"}
-            </Text>
-          </TouchableOpacity>
+        {/* Save button */}
+        <View className="px-5">
+          <CustomButton
+            title={editingCondition ? "Update" : "Save"}
+            disabled={isDisabled}
+            onPress={handleSave}
+          />
         </View>
-      </SafeAreaView>
-    </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

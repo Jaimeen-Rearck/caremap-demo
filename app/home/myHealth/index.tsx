@@ -38,9 +38,8 @@ export default function HealthProfile() {
     const sync = async () => {
       try {
         if (!user) return;
-        await syncPatientSession(user).then((patientData) => {
-          setPatientData(patientData);
-        });
+        const patientData = await syncPatientSession(user);
+        setPatientData(patientData);
       } catch (err) {
         logger.debug("Failed to sync patient session:", err);
         return ShowAlert("e", `Failed to sync patient data.`);
@@ -244,7 +243,7 @@ export default function HealthProfile() {
                       </View> */}
                       <Text
                         style={{ color: palette.heading }}
-                        className="mt-3 text-base font-medium  text-center"
+                        className="mt-3 text-lg font-semibold text-center"
                       >
                         {tile.name}
                       </Text>

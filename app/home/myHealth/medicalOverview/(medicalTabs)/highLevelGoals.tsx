@@ -5,6 +5,9 @@ import {
   TouchableOpacity,
   FlatList,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Progress, ProgressFilledTrack } from "@/components/ui/progress";
@@ -23,7 +26,10 @@ import ActionPopover from "@/components/shared/ActionPopover";
 import { CustomAlertDialog } from "@/components/shared/CustomAlertDialog";
 import palette from "@/utils/theme/color";
 import { useCustomToast } from "@/components/shared/useCustomToast";
+import { logger } from "@/services/logging/logger";
 import { router } from "expo-router";
+import { Divider } from "@/components/ui/divider";
+import { CustomButton } from "@/components/shared/CustomButton";
 
 const linkedGoals = [
   "Establish a consistent sleep schedule for better energy and recovery.",
@@ -48,14 +54,14 @@ export default function HighLevelGoals() {
 
   async function fetchGoals() {
     if (!patient?.id) {
-      console.log("No patient id found");
+      logger.debug("No patient id found");
       return;
     }
     try {
       const getUserGoals = await getPatientGoalsByPatientId(patient.id);
       setUserGoals(getUserGoals);
     } catch (error) {
-      console.log(error);
+      logger.debug(String(error));
     }
   }
 
@@ -143,37 +149,40 @@ export default function HighLevelGoals() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white ">
+    <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
-      <Header title="High level goals" 
-      right={
-                      <TouchableOpacity onPress={() => router.back()}>
-                        <Text className="text-white font-medium">Cancel</Text>
-                      </TouchableOpacity>
-                    }
+      <Header
+        title="High level goals"
+        right={
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text className="text-white font-medium">Cancel</Text>
+          </TouchableOpacity>
+        }
       />
 
-      <View className="px-6 pt-4 flex-1">
+      <View className="px-5 pt-5 flex-1">
         {/* Linked Health System */}
-        <View className="mb-6 mt-4">
-          <Text className="text-lg font-semibold text-cyan-700">
+        <View className="">
+          <Text
+            className="text-xl font-semibold"
+            style={{ color: palette.heading }}
+          >
             High level goals (Linked Health System)
           </Text>
 
-          {/* hr */}
-          <View className="h-px bg-gray-300 my-3" />
+          <Divider className="bg-gray-300 my-3" />
 
           <View>
             <FlatList
               data={linkedGoals}
               renderItem={({ item }) => (
                 <View className="border border-gray-300 p-3 rounded-md mb-2">
-                  <Text className="text-base text-black">{item}</Text>
+                  <Text className="text-lg">{item}</Text>
                 </View>
               )}
               keyExtractor={(_, index) => index.toString()}
               ListEmptyComponent={
-                <Text className="text-gray-500">
+                <Text className="text-gray-500 text-lg">
                   No user linked health system found.
                 </Text>
               }
@@ -185,23 +194,28 @@ export default function HighLevelGoals() {
         </View>
 
         {/* User Entered Goals */}
-        <View>
-          <Text className="text-lg font-semibold text-cyan-700">
+        <View className="flex-1 mt-4">
+          <Text
+            className="text-xl font-semibold"
+            style={{ color: palette.heading }}
+          >
             High level goals (User entered)
           </Text>
 
           {/* hr */}
-          <View className="h-px bg-gray-300 my-3" />
+          <Divider className="bg-gray-300 my-3" />
 
-          <View>
+          <View className="flex-1">
             <FlatList
               data={userGoals}
               keyExtractor={(item) => item.id.toString()}
               showsVerticalScrollIndicator={true}
               scrollEnabled={true}
-              style={{ minHeight: 50, maxHeight: 250 }}
+              style={{ minHeight: 50 }}
               ListEmptyComponent={
-                <Text className="text-gray-500">No user goals found.</Text>
+                <Text className="text-gray-500 text-lg">
+                  No user goals found.
+                </Text>
               }
               renderItem={({ item }) => {
                 let daysRemaining, totalDays, progress;
@@ -222,7 +236,7 @@ export default function HighLevelGoals() {
                     <View className="flex-row items-start mb-2">
                       <View className="flex-row items-center flex-1">
                         {/* Goal Title */}
-                        <Text className="text-base text-black ml-3 flex-1">
+                        <Text className="text-lg text-black ml-3 flex-1">
                           {item.goal_description}
                         </Text>
                       </View>
@@ -268,17 +282,13 @@ export default function HighLevelGoals() {
           </View>
         </View>
 
-        {/* hr */}
-        <View className="h-px bg-gray-300 my-2" />
+        <Divider className="bg-gray-300 my-2" />
 
         {/* Add Your Goals */}
-        <TouchableOpacity
-          className="mt-1 py-2 rounded-md flex-row items-center justify-center"
-          style={{ backgroundColor: palette.primary }}
+        <CustomButton
+          title="Add your goals "
           onPress={() => setShowAddForm(true)}
-        >
-          <Text className="text-white font-medium text-lg">Add your goals</Text>
-        </TouchableOpacity>
+        />
       </View>
 
       <CustomAlertDialog
@@ -340,113 +350,125 @@ function AddYourGoalsPage({
   };
 
   const handleSave = () => {
-    if (goalDescription.trim()) {
-      handleAddUpdateGoal({
-        id: editingGoal?.id,
-        goal_description: goalDescription.trim(),
-        target_date: completionDate ?? undefined, // Pass Date object
-      });
-    }
+    if (isDisabled) return;
+    handleAddUpdateGoal({
+      id: editingGoal?.id,
+      goal_description: goalDescription.trim(),
+      target_date: completionDate ?? undefined, // Pass Date object
+    });
+    onClose(); // Go back to list
   };
+
+  const isDisabled = goalDescription.trim().length === 0;
 
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
-      <Header title="High level goals"
-      right={
-                      <TouchableOpacity onPress={() => router.back()}>
-                        <Text className="text-white font-medium">Cancel</Text>
-                      </TouchableOpacity>
-                    }
-                     onBackPress={onClose} />
-
-      <View className="px-6 py-8">
-        {/* Heading */}
-        <Text
-          className="text-xl font-semibold mb-2"
-          style={{ color: palette.heading }}
+      <Header
+        title="High level goals"
+        right={
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text className="text-white font-medium">Cancel</Text>
+          </TouchableOpacity>
+        }
+        onBackPress={onClose}
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        className="bg-white"
+        // behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={"padding"}
+        // keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      >
+        <ScrollView
+          className="px-5 pt-5 flex-1"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {editingGoal ? "Update your goals" : "Add your Goal"}
-        </Text>
+          {/* Heading */}
+          <Text
+            className="text-xl font-semibold mb-2"
+            style={{ color: palette.heading }}
+          >
+            {editingGoal ? "Update your goals" : "Add your Goal"}
+          </Text>
 
-        {/* Examples */}
-        <Text className="text-gray-600 text-base">
-          Enter high level goals for your health
-        </Text>
-        <Text className="text-gray-600 text-base mb-1">e.g.</Text>
-        <View className="mb-4 ml-2">
-          <Text className="text-gray-600 text-base mb-1">
-            • Walk two flights of stairs comfortably
-          </Text>
-          <Text className="text-gray-600 text-base mb-1">
-            • Eat solid foods and regular liquids
-          </Text>
+          {/* Examples */}
           <Text className="text-gray-600 text-base">
-            • keep my seizures under control
+            Enter high level goals for your health
           </Text>
-        </View>
-
-        {/* hr */}
-        <View className="h-px bg-gray-300 mb-4" />
-
-        {/* Goal Description Input */}
-        <Text className="text-gray-600 text-base mb-2">
-          Enter a goal description
-        </Text>
-        <TextInput
-          value={goalDescription}
-          onChangeText={setGoalDescription}
-          placeholder="Your goals"
-          className="border border-gray-300 rounded-md px-3 py-3 text-base mb-6"
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-        />
-
-        <Text className="text-gray-600 text-base mb-2">
-          Set date to complete your goal
-        </Text>
-        {/* Completion Date */}
-        <TouchableOpacity
-          className="border border-gray-300 rounded-md px-3"
-          onPress={() => setShowDatePicker(true)}
-        >
-          <View className="flex-row items-center">
-            <TextInput
-              value={completionDate ? formatDate(completionDate) : ""}
-              placeholder="MM-DD-YY"
-              className="flex-1 text-base"
-              editable={false}
-              pointerEvents="none"
-            />
-            <Icon
-              as={CalendarDaysIcon}
-              className="text-typography-500 m-1 w-5 h-5"
-            />
+          <Text className="text-gray-600 text-base mb-1">e.g.</Text>
+          <View className="mb-4 ml-2">
+            <Text className="text-gray-600 text-base mb-1">
+              • Walk two flights of stairs comfortably
+            </Text>
+            <Text className="text-gray-600 text-base mb-1">
+              • Eat solid foods and regular liquids
+            </Text>
+            <Text className="text-gray-600 text-base">
+              • keep my seizures under control
+            </Text>
           </View>
-        </TouchableOpacity>
-        <DateTimePickerModal
-          isVisible={showDatePicker}
-          mode="date"
-          onConfirm={handleConfirm}
-          onCancel={() => setShowDatePicker(false)}
-          minimumDate={new Date()} // Prevent selecting past dates
-        />
+
+          {/* hr */}
+          <View className="h-px bg-gray-300 mb-4" />
+
+          {/* Goal Description Input */}
+          <Text className="text-gray-600 text-base mb-2">
+            Enter a goal description*
+          </Text>
+          <TextInput
+            value={goalDescription}
+            onChangeText={setGoalDescription}
+            placeholder="Your goals"
+            className="border border-gray-300 rounded-md px-3 py-3 text-base mb-6"
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
+
+          <Text className="text-gray-600 text-base mb-2">
+            Set date to complete your goal
+          </Text>
+          {/* Completion Date */}
+          <TouchableOpacity
+            className="border border-gray-300 rounded-md px-3"
+            onPress={() => setShowDatePicker(true)}
+          >
+            <View className="flex-row items-center">
+              <TextInput
+                value={completionDate ? formatDate(completionDate) : ""}
+                placeholder="MM-DD-YY"
+                className="flex-1 text-base"
+                editable={false}
+                pointerEvents="none"
+              />
+              <Icon
+                as={CalendarDaysIcon}
+                className="text-typography-500 m-1 w-5 h-5"
+              />
+            </View>
+          </TouchableOpacity>
+          <DateTimePickerModal
+            isVisible={showDatePicker}
+            mode="date"
+            onConfirm={handleConfirm}
+            onCancel={() => setShowDatePicker(false)}
+            minimumDate={new Date()} // Prevent selecting past dates
+          />
+        </ScrollView>
 
         {/* Save Button */}
-        <TouchableOpacity
-          className="py-2 rounded-md mt-4"
-          style={{ backgroundColor: palette.primary }}
-          onPress={() => {
-            handleSave();
-            onClose(); // Go back to list
-          }}
-        >
-          <Text className="text-white text-center text-lg font-medium">
-            {editingGoal ? "Update" : "Save"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+        <View className="px-5">
+          <CustomButton
+            title={editingGoal ? "Update" : "Save"}
+            onPress={() => {
+              handleSave();
+            }}
+            disabled={isDisabled}
+          />
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

@@ -99,11 +99,9 @@ export default function CareTeamListScreen() {
               })
             }
           >
-            <View className="bg-white px-3 py-1.5 rounded-lg">
-              <Text className="font-bold" style={{ color: palette.primary }}>
-                Add Contact
-              </Text>
-            </View>
+              <Text className="text-white font-medium whitespace-nowrap">
+                            Add contact
+                          </Text>
           </TouchableOpacity>
         }
       />
