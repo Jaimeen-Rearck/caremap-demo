@@ -13,6 +13,7 @@ import {
   Question,
   ResponseOption,
 } from "@/services/database/migrations/v1/schema_v1";
+import { logger } from "@/services/logging/logger";
 import { ROUTES } from "@/utils/route";
 import palette from "@/utils/theme/color";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -65,12 +66,34 @@ export default function QuestionFlowScreen() {
 
     const loadQuestionsWithOptions = async () => {
       if (!itemIdNum) return;
-      const questionWithOptions = await getQuestionsWithOptions(itemIdNum);
+      const questionWithOptions = await getQuestionsWithOptions(
+        itemIdNum,
+        entryIdNum
+      );
 
       const questionsArray = questionWithOptions.map((qwo) => qwo.question);
       const responseOptionsArray = questionWithOptions.flatMap(
         (qwo) => qwo.options
       );
+
+      const existingResponses: Record<number, any> = {};
+
+      questionWithOptions.forEach((qwo) => {
+        const response = qwo.existingResponse;
+        if (response && response.question_id != null) {
+          existingResponses[response.question_id] = response.answer;
+          logger.debug(
+            `Existing answer for question id ${response.question_id} is/are : ${response.answer}`
+          );
+        }
+      });
+
+      // --------------------------------------------------------------------------------------
+      // NOTE ::
+      // Frontend to utilize this existingResponses of type Record<number,any> to
+      // Either setAnswers(existingResponses);
+      // OR in other way of implementation further to populate UI with existing responses.
+      // --------------------------------------------------------------------------------------
 
       setQuestions(questionsArray);
       setResponseOptions(responseOptionsArray);
@@ -101,8 +124,6 @@ export default function QuestionFlowScreen() {
   const handleAddOption = (question_id: number, newOption: string) => {
     setCustomOptions((prev) => ({ ...prev, [question_id]: newOption }));
   };
-
-  
 
   const submitAnswers = async (responseObj: Record<number, any>) => {
     if (!user?.id) throw new Error("Authentication ERROR");
@@ -180,11 +201,11 @@ export default function QuestionFlowScreen() {
       {/* Header */}
       <Header
         title={itemName}
-       right={
-                       <TouchableOpacity onPress={() => router.back()}>
-                         <Text className="text-white font-medium">Cancel</Text>
-                       </TouchableOpacity>
-                     }
+        right={
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text className="text-white font-medium">Cancel</Text>
+          </TouchableOpacity>
+        }
       />
 
       {/* Content */}
@@ -219,7 +240,7 @@ export default function QuestionFlowScreen() {
           {/* Fixed bottom buttons */}
           <View className="flex-row p-4 border-t border-gray-200 bg-white">
             {/* Skip */}
-            {!currentQuestion.required && !isLast &&  (
+            {!currentQuestion.required && !isLast && (
               <TouchableOpacity
                 className="flex-1 py-3 rounded-lg border border-gray-300 mr-2"
                 onPress={() => {
@@ -227,7 +248,7 @@ export default function QuestionFlowScreen() {
                     ...prev,
                     [currentQuestion.id]: null,
                   }));
-                  
+
                   setCurrentIndex((p) => p + 1);
                 }}
               >

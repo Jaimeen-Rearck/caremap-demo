@@ -26,12 +26,12 @@ export interface TrackCategoryWithItems extends TrackCategory {
   items: TrackItemWithProgress[];
 };
 
-export interface TrackItemWithProgress{
+export interface TrackItemWithProgress {
   item: TrackItem;
-  entry_id:number;
+  entry_id: number;
   completed: number;
   total: number;
-  started: boolean;
+  summaries?: string[]; // item-level summaries
 };
 
 export interface TrackItemSelectable {

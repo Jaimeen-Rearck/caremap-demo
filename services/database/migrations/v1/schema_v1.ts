@@ -161,6 +161,7 @@ export interface Question {
   type: "boolean" | "mcq" | "msq" | "numeric" | "text";
   instructions?: string;
   required: boolean;
+  summary_template?:string;
   created_date: Date;
   updated_date: Date;
 }
@@ -190,6 +191,8 @@ export interface TrackItemEntry {
   patient_id: number;
   track_item_id: number;
   date: Date;
+  created_date: Date;
+  updated_date: Date;
 }
 
 export interface Contact {

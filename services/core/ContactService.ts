@@ -13,21 +13,13 @@ const checkUniqueFields = async (
   contactData: Partial<Contact>,
   excludeId?: number
 ): Promise<void> => {
+  // Only check phone number uniqueness (email is optional and not unique)
   if (contactData.phone_number) {
     const phoneHolder = await model.getFirstByFields({
       phone_number: contactData.phone_number,
     });
     if (phoneHolder && (phoneHolder as any).id !== excludeId) {
       throw new Error("Phone number already exists");
-    }
-  }
-
-  if (contactData.email) {
-    const emailHolder = await model.getFirstByFields({
-      email: contactData.email,
-    });
-    if (emailHolder && (emailHolder as any).id !== excludeId) {
-      throw new Error("Email already exists");
     }
   }
 };

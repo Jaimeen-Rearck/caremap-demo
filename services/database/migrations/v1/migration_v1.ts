@@ -180,6 +180,7 @@ export const up = async (db: SQLiteDatabase) => {
       type TEXT CHECK(type IN ('boolean', 'mcq', 'msq', 'numeric', 'text')) NOT NULL,
       instructions TEXT DEFAULT NULL,
       required INTEGER NOT NULL DEFAULT 0,
+      summary_template TEXT,
       created_date TEXT NOT NULL DEFAULT (datetime('now')),
       updated_date TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY(item_id) REFERENCES ${tables.TRACK_ITEM}(id) ON DELETE CASCADE
@@ -230,7 +231,7 @@ export const up = async (db: SQLiteDatabase) => {
       relationship TEXT DEFAULT NULL,
       phone_number TEXT NOT NULL UNIQUE,
       description TEXT DEFAULT NULL,
-      email TEXT DEFAULT NULL UNIQUE,
+      email TEXT DEFAULT NULL,
       created_date TEXT NOT NULL DEFAULT (datetime('now')),
       updated_date TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (patient_id) REFERENCES ${tables.PATIENT}(id) ON DELETE CASCADE

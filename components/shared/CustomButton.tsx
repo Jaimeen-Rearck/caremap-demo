@@ -7,6 +7,7 @@ type ButtonProps = {
   onPress?: () => void;
   disabled?: boolean;
   className?: string;
+  activeOpacity?: number;
 };
 
 export function CustomButton({
@@ -14,14 +15,16 @@ export function CustomButton({
   onPress,
   disabled = false,
   className,
+  activeOpacity = 0.75,
 }: ButtonProps) {
   return (
     <TouchableOpacity
+      activeOpacity={activeOpacity}
       style={{
         backgroundColor: palette.primary,
         opacity: disabled ? 0.5 : 1,
       }}
-      className={`py-[10px] rounded-lg ${className ?? ""}`}
+      className={`py-[10px] rounded-xl ${className ?? ""}`}
       onPress={onPress}
       disabled={disabled}
     >

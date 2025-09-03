@@ -1,4 +1,4 @@
-import { QuestionWithOptions, TrackCategoryWithItems, TrackCategoryWithSelectableItems } from '@/services/common/types';
+import { QuestionWithOptions, TrackCategoryWithItems, TrackCategoryWithSelectableItems, TrackItemWithProgress } from '@/services/common/types';
 import { getCurrentTimestamp } from '@/services/core/utils';
 import { useModel } from '@/services/database/BaseModel';
 import { tables } from '@/services/database/migrations/v1/schema_v1';
@@ -21,65 +21,75 @@ const trackItemEntryModel = new TrackItemEntryModel();
 
 const now = getCurrentTimestamp();
 
-// To be altered to send summarized response object
+
 export const getTrackCategoriesWithItemsAndProgress = async (
     patientId: number,
     date: string
 ): Promise<TrackCategoryWithItems[]> => {
     logger.debug('getTrackCategoriesWithItemsAndProgress called', { patientId, date });
 
-    const result = await useModel(trackCategoryModel, async (categoryModel) => {
-        const categories = await categoryModel.getAll();
+    const categories = await useModel(trackCategoryModel, async (categoryModel) => {
+        const cats = await categoryModel.getAll();
 
         const items = await useModel(trackItemModel, async (itemModel: any) => {
-            const result = await itemModel.runQuery(`
+            const rows = await itemModel.runQuery(`
         SELECT
-          ti.id                     AS item_id,     -- ✅ keep track item id
-          tie.id                    AS entry_id,    -- ✅ also return entry id
+          ti.id                     AS item_id,
+          tie.id                    AS entry_id,
           ti.name,
           ti.category_id,
           ti.created_date,
           ti.updated_date,
           COUNT(DISTINCT r.question_id) AS completed,
-          COUNT(DISTINCT q.id)          AS total,
-          CASE WHEN tie.id IS NULL THEN 0 ELSE 1 END AS started
+          COUNT(DISTINCT q.id)          AS total
         FROM ${tables.TRACK_ITEM} ti
         INNER JOIN ${tables.TRACK_ITEM_ENTRY} tie
           ON tie.track_item_id = ti.id
          AND tie.patient_id = ?
          AND tie.date = ?
         LEFT JOIN ${tables.QUESTION} q
-          ON q.item_id = ti.id                 -- questions for this item
+          ON q.item_id = ti.id
         LEFT JOIN ${tables.TRACK_RESPONSE} r
-          ON r.track_item_entry_id = tie.id    -- responses for this entry
+          ON r.track_item_entry_id = tie.id
         GROUP BY tie.id, ti.id, ti.name, ti.category_id, ti.created_date, ti.updated_date
       `, [patientId, date]);
-            return result as any[];
+            return rows as any[];
         });
 
-        // Group items under categories and transform to match your interface
-        return categories.map((cat: any) => ({
-            ...cat,
-            items: items
-                .filter((row: any) => row.category_id === cat.id)
-                .map((row: any) => ({
+        // Build categories with items + summaries inline
+        const result: TrackCategoryWithItems[] = [];
+
+        for (const cat of cats) {
+            const catItems: TrackItemWithProgress[] = [];
+
+            for (const row of items.filter((r: any) => r.category_id === cat.id)) {
+                const summaries = row.entry_id ? await getSummariesForItem(row.entry_id) : [];
+                catItems.push({
                     item: {
-                        id: row.item_id,                 // ✅ still TRACK_ITEM.id (so questions load)
+                        id: row.item_id,
                         category_id: row.category_id,
                         name: row.name,
                         created_date: row.created_date,
-                        updated_date: row.updated_date
+                        updated_date: row.updated_date,
                     },
-                    entry_id: row.entry_id,          // ✅ NEW: carry TRACK_ITEM_ENTRY.id for saving responses
+                    entry_id: row.entry_id,
                     completed: row.completed,
                     total: row.total,
-                    started: row.started === 1,
-                }))
-        }));
+                    summaries,
+                });
+            }
+
+            result.push({ ...cat, items: catItems });
+        }
+
+        return result;
     });
 
-    logger.debug('getTrackCategoriesWithItemsAndProgress completed', JSON.stringify(result, null, 2));
-    return result;
+    logger.debug(
+        'getTrackCategoriesWithItemsAndProgress completed',
+        JSON.stringify(categories, null, 2)
+    );
+    return categories;
 };
 
 
@@ -132,7 +142,8 @@ export const getAllCategoriesWithSelectableItems = async (
 
 
 export const getQuestionsWithOptions = async (
-    itemId: number
+    itemId: number,
+    entryId: number
 ): Promise<QuestionWithOptions[]> => {
     logger.debug('getQuestionsWithOptions called', { itemId });
 
@@ -144,10 +155,21 @@ export const getQuestionsWithOptions = async (
             return result as any[];
         });
 
+        // Get existing responses for the given entryId
+        const existingResponses = await useModel(trackResponseModel, async (respModel: any) => {
+            return await respModel.getByFields({ track_item_entry_id: entryId });
+        });
+
+        // Map responses by question_id for fast lookup
+        const responseMap = new Map<number, any>();
+        for (const resp of existingResponses) {
+            responseMap.set(resp.question_id, resp);
+        }
+
         return questions.map((q: any) => ({
             question: q,
             options: allOptions.filter((opt: any) => opt.question_id === q.id),
-            existingResponse: undefined
+            existingResponse: responseMap.get(q.id) ?? undefined
         }));
     });
 
@@ -286,4 +308,48 @@ export const removeTrackItemFromDate = async (
     });
 
     logger.debug('unlinkItemFromPatientDate completed', { itemId, patientId, date });
+};
+
+export const generateSummary = (template: string, answer: string): string | null => {
+    if (!template || !answer) return null;
+
+    try {
+        let parsed: any;
+        try {
+            parsed = JSON.parse(answer);
+        } catch {
+            parsed = answer;
+        }
+
+        if (Array.isArray(parsed)) {
+            return template.replace('{{answer}}', parsed.join(', '));
+        }
+        logger.debug(`${template.replace('{{answer}}', String(parsed))}`);
+        return template.replace('{{answer}}', String(parsed));
+    } catch {
+        return null;
+    }
+};
+
+export const getSummariesForItem = async (entryId: number): Promise<string[]> => {
+    return useModel(questionModel, async (qModel) => {
+        const rows = await qModel.runQuery(
+            `
+      SELECT q.summary_template, r.answer
+      FROM ${tables.QUESTION} q
+      LEFT JOIN ${tables.TRACK_RESPONSE} r
+        ON q.id = r.question_id AND r.track_item_entry_id = ?
+      WHERE q.item_id = (SELECT item_id FROM ${tables.TRACK_ITEM_ENTRY} WHERE id = ?)
+      `,
+            [entryId, entryId]
+        );
+
+        return rows
+            .map((row: { summary_template: string; answer: string; }) =>
+                row.summary_template && row.answer
+                    ? generateSummary(row.summary_template, row.answer)
+                    : null
+            )
+            .filter((s: any): s is string => !!s);
+    });
 };

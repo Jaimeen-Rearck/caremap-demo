@@ -56,7 +56,12 @@ export abstract class BaseModel<T> {
     // Wrapper method to run any SQL query safely inside a transaction using prepared statements
     protected async run(sql: string, params: any[] = []) {
         logger.debug("SQL: ", sql);
-        logger.debug("Params: ", params);
+
+        const containsBase64JPEG = params.some(param =>
+            typeof param === 'string' && param.includes('data:image/jpeg;base64')
+        );
+        containsBase64JPEG ? logger.debugTrunc("Params: ", params) : logger.debug("Params: ", params);
+        
         let result: any;
         await this.db.withTransactionAsync(async () => {
             const stmt = await this.db.prepareAsync(sql);

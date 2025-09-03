@@ -46,7 +46,7 @@ export default function EditProfilePage() {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const showToast = useCustomToast();
   useEffect(() => {
-    logger.debug("Edit Patient: ", patient);
+    logger.debugTrunc("Edit Patient: ", patient);
     if (!patient) {
       router.replace(ROUTES.MY_HEALTH);
       return;

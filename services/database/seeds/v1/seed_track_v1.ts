@@ -60,6 +60,7 @@ export async function seedTrackDatabase(db: SQLiteDatabase) {
                     type,
                     instructions,
                     required,
+                    summary_template,
                     created_date,
                     updated_date
                 ) VALUES (
@@ -68,6 +69,7 @@ export async function seedTrackDatabase(db: SQLiteDatabase) {
                     '${escapeSQL(question.type)}',
                     NULL,
                     ${question.required ? 1 : 0},
+                    '${escapeSQL(question.summary_template)}',
                     '${new Date().toISOString()}',
                     '${new Date().toISOString()}'
                 )`
