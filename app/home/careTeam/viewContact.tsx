@@ -5,13 +5,10 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   StyleSheet,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as Linking from "expo-linking";
 import Header from "@/components/shared/Header";
 import palette from "@/utils/theme/color";
 import { getContactById } from "@/services/core/ContactService";
@@ -27,8 +24,8 @@ import {
   ChevronRight,
   Info,
 } from "lucide-react-native";
-import { logger } from "@/services/logging/logger";
 import { CustomButton } from "@/components/shared/CustomButton";
+import { sendEmail, sendMessage, makePhoneCall } from "@/services/core/utils";
 
 type Params = { contactId?: string | number };
 
@@ -53,34 +50,6 @@ export default function ViewContact() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const openDialer = async (phone?: string | null) => {
-    if (!phone) return;
-    try {
-      const scheme = Platform.OS === "ios" ? "tel://" : "tel:";
-      await Linking.openURL(`${scheme}${phone}`);
-    } catch {
-      Alert.alert("Unable to open dialer.");
-    }
-  };
-
-  const openSMS = async (phone?: string | null) => {
-    if (!phone) return;
-    try {
-      await Linking.openURL(`sms:${phone}`);
-    } catch {
-      Alert.alert("Unable to open messages");
-    }
-  };
-
-  const openEmail = async (email?: string | null) => {
-    if (!email) return;
-    try {
-      await Linking.openURL(`mailto:${email}`);
-    } catch {
-      Alert.alert("Unable to open mail app");
-    }
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
@@ -157,19 +126,19 @@ export default function ViewContact() {
                 label="Call"
                 icon={<Phone size={20} color={palette.primary} />}
                 disabled={!contact.phone_number}
-                onPress={() => openDialer(contact.phone_number)}
+                onPress={() => makePhoneCall(contact.phone_number)}
               />
               <MiniAction
                 label="Message"
                 icon={<MessageSquare size={20} color={palette.primary} />}
                 disabled={!contact.phone_number}
-                onPress={() => openSMS(contact.phone_number)}
+                onPress={() => sendMessage(contact.phone_number)}
               />
               <MiniAction
                 label="Email"
                 icon={<Mail size={20} color={palette.primary} />}
                 disabled={!contact.email}
-                onPress={() => contact.email && openEmail(contact.email)}
+                onPress={() => contact.email && sendEmail(contact.email)}
               />
             </View>
           </View>
@@ -186,14 +155,14 @@ export default function ViewContact() {
               label="Phone"
               value={contact.phone_number}
               icon={<Phone size={18} color={palette.primary} />}
-              // onPress={() => openDialer(contact.phone_number)}
+              // onPress={() => makePhoneCall(contact.phone_number)}
             />
             <Separator />
             <InfoRow
               label="Email"
               value={contact.email}
               icon={<Mail size={18} color={palette.primary} />}
-              // onPress={() => contact.email && openEmail(contact.email)}
+              // onPress={() => contact.email && sendEmail(contact.email)}
             />
             <Separator />
             <InfoRow
