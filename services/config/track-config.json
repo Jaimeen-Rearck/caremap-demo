@@ -1,0 +1,75 @@
+{
+  "version":8,
+  "predefinedTrackCategories": [
+    {
+      "code": "c_fits_track",
+      "name": "Fitness Tracking"
+    }
+  ],
+  "predefinedTrackItems": [
+    {
+      "code": "i_exer_rout",
+      "category_code": "c_fits_track",
+      "name": "Exercise Routine",
+      "frequency": "daily",
+      "questions": [
+        {
+          "code": "q_exer_today",
+          "text": "Did you exercise today?",
+          "type": "boolean",
+          "required": true,
+          "units":"(in minutes)",
+          "summary_template": "Exercise done: {{answer}}.",
+          "parent_question_code": null,
+          "display_condition": null,
+          "responseOptions":[
+            {
+              "code": "o_exer_today_yes",
+              "text": "Yes"
+            },
+            {
+              "code": "o_exer_today_no",
+              "text": "No"
+            }
+          ]
+        },
+        {
+          "code": "q_exer_type",
+          "text": "What type of exercises did you do?",
+          "type": "msq",
+          "required": false,
+          "summary_template": "Exercise type - {{answer}}",
+          "parent_question_code": "q_exer_today",
+          "display_condition": "{\"equals\": \"o_exer_today_yes\"}",
+          "responseOptions": [
+            {
+              "code": "o_cardio",
+              "text": "Cardio"
+            },
+            {
+              "code": "o_strength",
+              "text": "Strength"
+            },
+            {
+              "code": "o_yoga",
+              "text": "Yoga"
+            },
+            {
+              "code": "o_stretch",
+              "text": "Stretching"
+            }
+          ]
+        },
+        {
+          "code": "q_custom",
+          "text": "Write about yourself.",
+          "type": "text",
+          "required": true,
+          "summary_template": "{{answer}}",
+          "parent_question_code": null,
+          "display_condition": null
+        }
+      ]
+    }
+  ]
+}
