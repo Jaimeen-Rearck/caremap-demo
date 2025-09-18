@@ -179,6 +179,9 @@ export const getTrackCategoriesWithItemsAndProgress = async (
                         status: row.status,
                         created_date: row.created_date,
                         updated_date: row.updated_date,
+                        code: row.code,
+                        frequency: row.frequency,
+                        status: row.status
                     },
                     entry_id: row.entry_id,
                     completed: row.completed,

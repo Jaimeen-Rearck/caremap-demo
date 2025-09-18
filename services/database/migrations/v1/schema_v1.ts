@@ -217,7 +217,7 @@ export interface TrackItemEntry {
 export interface TrackConfigVersion{
   module:string;
   version:number;
-  last_synced_at:string;
+  last_synced_at:string | null;
 }
 
 export interface Contact {
