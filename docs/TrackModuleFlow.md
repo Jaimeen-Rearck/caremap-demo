@@ -1,189 +1,340 @@
-## Track Module — End-to-End Flow (Simple, Practical Guide)
+# Track Module Flow Documentation
 
-This document explains how tracking works in the app: what’s stored, when entries appear, how progress is calculated, and what happens when users add/remove items. Examples and flowcharts included.
+## Overview
 
-### Core Concepts
+The Track Module allows patients to track various health metrics and activities on a daily, weekly, or monthly basis. This document provides a simplified explanation of the Track Module flow, including examples and implementation guidelines.
 
-- **Track Category**: Group of related items (e.g., “Vitals”).
-- **Track Item**: A specific thing to record (e.g., “Blood Pressure”), with a `frequency` (daily | weekly | monthly) and `status` (active | inactive).
-- **Question**: Prompts under an item (e.g., “Systolic”, “Diastolic”), with types (boolean | mcq | msq | numeric | text). Questions have `status=active|inactive`.
-- **Track Item Entry**: A patient-specific instance of an item on a date. Has `status=active|inactive` to support soft-deletes and history.
-- **Track Response**: A patient’s answer to a question for a specific entry. Preserved even if entries become inactive (for summaries/history).
+## Core Components
 
-Key tables used: `TRACK_CATEGORY`, `TRACK_ITEM`, `QUESTION`, `RESPONSE_OPTION`, `TRACK_ITEM_ENTRY`, `TRACK_RESPONSE`.
+1. **Track Categories**: Groups of related tracking items (e.g., Fitness Tracking)
+2. **Track Items**: Specific metrics to track (e.g., Exercise Routine)
+3. **Questions**: Data points collected for each track item
+4. **Responses**: User answers to questions
 
-### Frequencies and Dates
+## Data Flow
 
-- **Daily**: The entry’s date is the same day the user selects.
-- **Weekly**: The entry’s date is the Monday of the selected week.
-- **Monthly**: The entry’s date is the 1st of the selected month.
+```
+Track Category → Track Items → Questions → Responses
+```
 
-Date normalization happens whenever you add or load for a day. To optimize performance, entries are lazily created only when the user selects a date.
+## Backend Structure
 
-Examples:
-- Daily: Select 09-17-2025 → entry on 09-17-2025.
-- Weekly: Select 09-17-2025 (Wed) → entry on 09-15-2025 (the week’s Monday).
-- Monthly: Select 09-17-2025 → entry on 09-01-2025.
+### 1. Configuration
 
-### Load-on-Select (Lazy Creation)
+Track module configuration is stored in `track-config.json` which defines:
+- Predefined track categories
+- Predefined track items with questions
+- Response options for questions
 
-When you open Track for a date:
-- The UI calls `getTrackCategoriesWithItemsAndProgress(patientId, date)`.
-- Before loading, the service ensures entries for that date ONLY for items the patient is already subscribed to (has any active entry) and whose frequency matches the date (daily/that Monday/1st of month).
-- Then it loads entries for that normalized date with `status='active'` only.
+### 2. Version Management
 
-Result: Items appear automatically on relevant dates without pre-creating entries for all days/weeks/months.
+The `track-version-manager.ts` handles:
+- Tracking configuration versions
+- Determining when to sync new configurations
+- Updating stored versions
 
-### Adding Items
+### 3. Core Service
 
-Function: `addTrackItemOnDate(itemId, userId, patientId, date)`
+The `TrackService.ts` provides:
+- Data retrieval for track categories, items, and questions
+- Response handling
+- Date normalization based on frequency
 
-- Normalizes `date` by the item’s `frequency`.
-- If an entry exists for `(patientId, itemId, normalizedDate)`:
-  - If inactive → reactivates (`status='active'`).
-  - If active → no-op.
-- If no entry exists → inserts a new `TRACK_ITEM_ENTRY` with `status='active'`.
+## TrackService Methods
 
-Effect: The item becomes visible for that normalized date (and future relevant dates via lazy creation).
+### Date Helper Methods
 
-Example (Weekly):
-- User selects 09-17-2025 and adds “Exercise” (weekly).
-- Normalized date = Monday 09-15-2025.
-- App creates/reactivates the entry at 09-15-2025.
-- Next week, when user clicks any day in that week, the service lazily creates/reactivates Monday’s entry for that new week.
+#### `normalizeDateByFrequency(dateStr: string, frequency: 'daily' | 'weekly' | 'monthly'): string`
+Normalizes a date string based on the frequency.
+- **Parameters**:
+  - `dateStr`: Date string in MM-DD-YYYY format
+  - `frequency`: 'daily', 'weekly', or 'monthly'
+- **Returns**: Normalized date string in MM-DD-YYYY format
+- **Example**:
+  ```typescript
+  // For a daily item, June 15, 2023 remains June 15, 2023
+  normalizeDateByFrequency("06-15-2023", "daily") // Returns "06-15-2023"
+  
+  // For a weekly item, June 15, 2023 (Thursday) becomes June 12, 2023 (Monday)
+  normalizeDateByFrequency("06-15-2023", "weekly") // Returns "06-12-2023"
+  
+  // For a monthly item, June 15, 2023 becomes June 1, 2023
+  normalizeDateByFrequency("06-15-2023", "monthly") // Returns "06-01-2023"
+  ```
 
-### Removing Items
+### Core Methods
 
-Function: `removeTrackItemFromDate(itemId, userId, patientId, date)`
+#### `getTrackCategoriesWithItemsAndProgress(patientId: number, date: string): Promise<TrackCategoryWithItems[]>`
+Retrieves all active track categories with their items and progress for a specific patient and date.
+- **Parameters**:
+  - `patientId`: ID of the patient
+  - `date`: Date string in MM-DD-YYYY format
+- **Returns**: Array of track categories with items and progress information
+- **Description**: This method ensures entries exist for subscribed items, fetches all active categories and items, and calculates completion progress.
 
-- Soft-deletes by setting `status='inactive'` on all entries for the item/patient across all dates (past and future).
-- Responses are preserved; they remain available for summaries/history.
+#### `getAllCategoriesWithSelectableItems(patientId: number, date: string): Promise<TrackCategoryWithSelectableItems[]>`
+Retrieves all active categories with their items and a flag indicating if the patient has selected each item.
+- **Parameters**:
+  - `patientId`: ID of the patient
+  - `date`: Date string in MM-DD-YYYY format
+- **Returns**: Array of categories with selectable items
+- **Description**: Used for item selection screens where patients can subscribe to tracking items.
 
-Why soft-delete? We must keep historical answers for summary, audits, and analytics.
+#### `getQuestionsWithOptions(itemId: number, entryId: number): Promise<QuestionWithOptions[]>`
+Retrieves all questions with their options for a specific track item and entry.
+- **Parameters**:
+  - `itemId`: ID of the track item
+  - `entryId`: ID of the track item entry
+- **Returns**: Array of questions with their options and existing responses
+- **Description**: Used to display questions for a track item with any previously saved responses.
 
-### Listing Items to Add
+#### `saveResponse(entryId: number, questionId: number, answer: string, userId: string, patientId: number): Promise<void>`
+Saves a response to a question for a specific track item entry.
+- **Parameters**:
+  - `entryId`: ID of the track item entry
+  - `questionId`: ID of the question
+  - `answer`: Answer string (JSON stringified)
+  - `userId`: ID of the user
+  - `patientId`: ID of the patient
+- **Returns**: Promise that resolves when the response is saved
+- **Description**: Creates or updates a response to a question.
 
-Function: `getAllCategoriesWithSelectableItems(patientId, date)`
+#### `addOptionToQuestion(questionId: number, label: string): Promise<number>`
+Adds a new option to a question.
+- **Parameters**:
+  - `questionId`: ID of the question
+  - `label`: Text label for the new option
+- **Returns**: ID of the newly created option
+- **Description**: Used for adding custom options to questions.
 
-- Returns all `status='active'` categories and items (ignores the date for item details).
-- Marks `selected=true` if the patient has any `status='active'` entry for that item on any date.
-- Lets the user toggle selection (add = create/reactivate; remove = inactivate all entries).
+#### `addTrackItemOnDate(itemId: number, userId: string, patientId: number, date: string): Promise<void>`
+Links a track item to a patient on a specific date.
+- **Parameters**:
+  - `itemId`: ID of the track item
+  - `userId`: ID of the user
+  - `patientId`: ID of the patient
+  - `date`: Date string in MM-DD-YYYY format
+- **Returns**: Promise that resolves when the item is linked
+- **Description**: Creates an entry for a track item on a specific date or reactivates an existing inactive entry.
 
-### Viewing Progress
+#### `removeTrackItemFromDate(itemId: number, userId: string, patientId: number, date: string): Promise<void>`
+Unlinks a track item from a patient.
+- **Parameters**:
+  - `itemId`: ID of the track item
+  - `userId`: ID of the user
+  - `patientId`: ID of the patient
+  - `date`: Date string in MM-DD-YYYY format
+- **Returns**: Promise that resolves when the item is unlinked
+- **Description**: Deactivates all entries for this item/patient (both past and future) while preserving responses.
 
-Function: `getTrackCategoriesWithItemsAndProgress(patientId, date)`
+#### `generateSummary(template: string, answer: string): string | null`
+Generates a summary string from a template and an answer.
+- **Parameters**:
+  - `template`: Summary template string with {{answer}} placeholder
+  - `answer`: Answer string (JSON stringified)
+- **Returns**: Generated summary string or null if generation fails
+- **Description**: Used to create human-readable summaries from responses.
 
-- Filters by:
-  - `TRACK_CATEGORY.status='active'`
-  - `TRACK_ITEM.status='active'`
-  - `QUESTION.status='active'`
-  - `TRACK_ITEM_ENTRY.status='active'`
-- For each visible item (at the normalized date), progress is:
-  - completed = distinct answered questions for that entry
-  - total = distinct active questions for the item
-- Also fetches item-level summaries.
+#### `getSummariesForItem(entryId: number): Promise<string[]>`
+Retrieves all summaries for a specific track item entry.
+- **Parameters**:
+  - `entryId`: ID of the track item entry
+- **Returns**: Array of summary strings
+- **Description**: Fetches all questions for an item, their responses, and generates summaries.
+
+#### `addCustomGoal(params: CustomGoalParams): Promise<number>`
+Adds a custom goal track item with questions.
+- **Parameters**:
+  - `params`: Object containing:
+    - `name`: Name of the custom goal
+    - `patientId`: ID of the patient
+    - `date`: Date string in MM-DD-YYYY format
+    - `questions`: Array of question objects
+- **Returns**: ID of the newly created track item
+- **Description**: Creates a new track item in the Custom category with specified questions and options.
+
+## API Examples
+
+### 1. Get Track Categories with Items
+
+**Request:**
+```typescript
+const result = await getTrackCategoriesWithItemsAndProgress(patientId, date);
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "code": "c_fits_track",
+    "name": "Fitness Tracking",
+    "status": "active",
+    "items": [
+      {
+        "item": {
+          "id": 101,
+          "category_id": 1,
+          "code": "i_exer_rout",
+          "name": "Exercise Routine",
+          "frequency": "daily",
+          "status": "active",
+          "created_date": "2023-06-15T10:30:00Z",
+          "updated_date": "2023-06-15T10:30:00Z"
+        },
+        "entry_id": 1001,
+        "completed": 2,
+        "total": 3,
+        "summaries": ["Exercise done: Yes", "Exercise type - Cardio, Strength"]
+      }
+    ]
+  }
+]
+```
+
+### 2. Get Questions for Item
+
+**Request:**
+```typescript
+const questions = await getQuestionsWithOptions(itemId, entryId);
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 201,
+    "code": "q_exer_today",
+    "text": "Did you exercise today?",
+    "type": "boolean",
+    "required": true,
+    "units": "(in minutes)",
+    "summary_template": "Exercise done: {{answer}}.",
+    "parent_question_code": null,
+    "display_condition": null,
+    "options": [
+      {
+        "id": 301,
+        "code": "o_exer_today_yes",
+        "text": "Yes"
+      },
+      {
+        "id": 302,
+        "code": "o_exer_today_no",
+        "text": "No"
+      }
+    ]
+  },
+  {
+    "id": 202,
+    "code": "q_exer_type",
+    "text": "What type of exercises did you do?",
+    "type": "msq",
+    "required": false,
+    "summary_template": "Exercise type - {{answer}}",
+    "parent_question_code": "q_exer_today",
+    "display_condition": "{\"equals\": \"o_exer_today_yes\"}",
+    "options": [
+      {
+        "id": 303,
+        "code": "o_cardio",
+        "text": "Cardio"
+      },
+      {
+        "id": 304,
+        "code": "o_strength",
+        "text": "Strength"
+      },
+      {
+        "id": 305,
+        "code": "o_yoga",
+        "text": "Yoga"
+      },
+      {
+        "id": 306,
+        "code": "o_stretch",
+        "text": "Stretching"
+      }
+    ]
+  }
+]
+```
+
+### 3. Save Responses
+
+**Request:**
+```typescript
+await saveResponses(entryId, [
+  {
+    question_id: 201,
+    response_option_id: 301, // Yes
+    text_response: null
+  },
+  {
+    question_id: 202,
+    response_option_id: [303, 304], // Cardio, Strength
+    text_response: null
+  }
+]);
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "updated_entry_id": 1001
+}
+```
+
+## Date Handling
+
+The Track Module handles dates differently based on frequency:
+
+1. **Daily**: Uses the exact date (MM-DD-YYYY)
+2. **Weekly**: Normalizes to the Monday of the week
+3. **Monthly**: Normalizes to the first day of the month
 
 Example:
-- “Blood Pressure” has 2 active questions.
-- Patient answered both → completed=2, total=2 → progress 100%.
+```typescript
+// For a daily item, June 15, 2023 remains June 15, 2023
+normalizeDateByFrequency("06-15-2023", "daily") // Returns "06-15-2023"
 
-### Summaries
+// For a weekly item, June 15, 2023 (Thursday) becomes June 12, 2023 (Monday)
+normalizeDateByFrequency("06-15-2023", "weekly") // Returns "06-12-2023"
 
-- Summaries are generated per entry by evaluating each question’s `summary_template` against its stored answer.
-- Deactivated entries don’t display in the active list, but their responses still exist, so historical summaries can still be derived when needed.
-
-### Status Rules
-
-- Category/Item/Question `status='inactive'` → they don’t appear or count.
-- Entry `status='inactive'` → hidden from lists and progress but responses remain in `TRACK_RESPONSE`.
-- Removing an item = set all its entries to `inactive` for that patient.
-- Adding an item on a date = create/reactivate the entry for the frequency-normalized date.
-
----
-
-## Flowcharts (Mermaid)
-
-### 1) Daily Load Flow (Example: Select 09-17-2025)
-
-```mermaid
-flowchart TD
-  A[User selects 09-17-2025] --> B[Normalize date (Daily) = 09-17-2025]
-  B --> C[Find subscribed items for patient]
-  C --> D{Entry exists for 09-17-2025?}
-  D -- No --> E[Create entry 09-17-2025 status=active]
-  D -- Yes but inactive --> F[Reactivate entry]
-  D -- Yes and active --> G[No change]
-  E --> H[Load items & progress]
-  F --> H
-  G --> H
-  H --> I[Render daily items for 09-17-2025]
+// For a monthly item, June 15, 2023 becomes June 1, 2023
+normalizeDateByFrequency("06-15-2023", "monthly") // Returns "06-01-2023"
 ```
 
-### 2) Weekly Load Flow (Example: Select Wed 09-17-2025)
+## Question Types and Conditional Display
 
-```mermaid
-flowchart TD
-  A[User selects 09-17-2025] --> B[Normalize (Weekly) = Monday 09-15-2025]
-  B --> C[Find subscribed weekly items]
-  C --> D{Entry exists for 09-15-2025?}
-  D -- No --> E[Create entry 09-15-2025 status=active]
-  D -- Yes but inactive --> F[Reactivate entry]
-  D -- Yes and active --> G[No change]
-  E --> H[Load items & progress for 09-15-2025]
-  F --> H
-  G --> H
-  H --> I[Render weekly items mapped for the selected date]
+The Track Module supports different question types:
+- **boolean**: Yes/No questions
+- **msq**: Multiple-select questions
+- **text**: Free text input
+
+Questions can be conditionally displayed based on previous answers using the `display_condition` property and `parent_question_code`.
+
+Example:
+```json
+{
+  "code": "q_exer_type",
+  "parent_question_code": "q_exer_today",
+  "display_condition": "{\"equals\": \"o_exer_today_yes\"}"
+}
 ```
+This question will only display if the answer to "q_exer_today" equals "o_exer_today_yes".
 
-### 3) Monthly Load Flow (Example: Select 09-17-2025)
+## Implementation Guidelines for Frontend Team
 
-```mermaid
-flowchart TD
-  A[User selects 09-17-2025] --> B[Normalize (Monthly) = 09-01-2025]
-  B --> C[Find subscribed monthly items]
-  C --> D{Entry exists for 09-01-2025?}
-  D -- No --> E[Create entry 09-01-2025 status=active]
-  D -- Yes but inactive --> F[Reactivate entry]
-  D -- Yes and active --> G[No change]
-  E --> H[Load items & progress for 09-01-2025]
-  F --> H
-  G --> H
-  H --> I[Render monthly items mapped for the selected date]
-```
+### 1. Date Handling
 
-### 4) Add Item Flow (Weekly Example)
+- Always use the `normalizeDateByFrequency` function when displaying or storing dates
+- Display the appropriate frequency label (Daily, Weekly, Monthly) for each track item
+- When showing calendar views, highlight dates that have entries
 
-```mermaid
-flowchart TD
-  A[Add item 'Exercise' on 09-17-2025] --> B[Normalize = Monday 09-15-2025]
-  B --> C{Entry exists?}
-  C -- No --> D[Create entry 09-15 status=active]
-  C -- Yes but inactive --> E[Reactivate entry]
-  C -- Yes and active --> F[No change]
-  D --> G[Item appears for that week]
-  E --> G
-  F --> G
-```
+### 2. Conditional Questions
 
-### 5) Remove Item Flow (Soft Delete, Preserve Responses)
-
-```mermaid
-flowchart TD
-  A[User removes item] --> B[Set status=inactive for ALL entries of that item/patient]
-  B --> C[Do NOT delete responses]
-  C --> D[Item disappears from future date views]
-  C --> E[Past responses remain for summaries/history]
-```
-
----
-
-## Minimal API Cheat Sheet
-
-- `getTrackCategoriesWithItemsAndProgress(patientId, date)`
-  - Lazily ensures entries for subscribed items on the selected date (normalized), then returns items with progress and summaries.
-- `getAllCategoriesWithSelectableItems(patientId, date)`
-  - Shows all active categories/items; `selected=true` if any active entry exists for the patient.
-- `addTrackItemOnDate(itemId, userId, patientId, date)`
-  - Create/reactivate the entry for the frequency-normalized date.
-- `removeTrackItemFromDate(itemId, userId, patientId, date)`
-  - Soft-delete (set inactive) across all dates for that item/patient; preserves responses.
+- Implement dynamic form rendering based on `display_condition` and `parent_question_code`
+- Hide/show questions based on parent question responses
+- Validate that required questions are answered before submission
