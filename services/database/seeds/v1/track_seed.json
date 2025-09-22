@@ -40,22 +40,34 @@
       "item_id": 3,
       "text": "What type of exercises did you do?",
       "type": "msq",
-      "required": false
+      "required": false,
+      "summary_template":"Exercise done: {{answer}}"
     },
     {
       "id": 5,
       "item_id": 4,
       "text": "How would you rate your meals today?",
       "type": "mcq",
-      "required": true
+      "required": true,
+      "summary_template": "Meals were rated as {{answer}}"
     },
     {
       "id": 6,
       "item_id": 4,
       "text": "Any food sensitivities or issues?",
       "type": "boolean",
-      "required": false
+      "required": false,
+      "summary_template": "Food sensitivities/issues: {{answer}}"
+    },
+    {
+      "id": 7,
+      "item_id": 4,
+      "text": "Your food choices",
+      "type": "text",
+      "required": false,
+       "summary_template": "Food choice: {{answer}}"
     }
+
   ],
   "sampleResponseOptions": [
     {

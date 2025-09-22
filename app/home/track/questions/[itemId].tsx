@@ -4,11 +4,7 @@ import { useCustomToast } from "@/components/shared/useCustomToast";
 import { PatientContext } from "@/context/PatientContext";
 import { TrackContext } from "@/context/TrackContext";
 import { UserContext } from "@/context/UserContext";
-import {
-  addOptionToQuestion,
-  getQuestionsWithOptions,
-  saveResponse,
-} from "@/services/core/TrackService";
+import { addOptionToQuestion, getQuestionsWithOptions, saveResponse } from "@/services/core/TrackService";
 import {
   Question,
   ResponseOption,
@@ -55,14 +51,14 @@ export default function QuestionFlowScreen() {
   const isLast = currentIndex === questions.length - 1;
 
   useEffect(() => {
-    if (!user) {
-      router.replace(ROUTES.LOGIN);
-      return;
-    }
-    if (!patient) {
-      router.replace(ROUTES.MY_HEALTH);
-      return;
-    }
+  if (!user) {
+    router.replace(ROUTES.LOGIN);
+    return;
+  }
+  if (!patient) {
+    router.replace(ROUTES.MY_HEALTH);
+    return;
+  }
 
     const loadQuestionsWithOptions = async () => {
       if (!itemIdNum) return;
@@ -71,35 +67,39 @@ export default function QuestionFlowScreen() {
         entryIdNum
       );
 
-      const questionsArray = questionWithOptions.map((qwo) => qwo.question);
-      const responseOptionsArray = questionWithOptions.flatMap(
-        (qwo) => qwo.options
-      );
+    const questionsArray = questionWithOptions.map((qwo) => qwo.question);
+    const responseOptionsArray = questionWithOptions.flatMap((qwo) => qwo.options);
 
-      const existingResponses: Record<number, any> = {};
+    const existingResponses: Record<number, any> = {};
 
-      questionWithOptions.forEach((qwo) => {
-        const response = qwo.existingResponse;
-        if (response && response.question_id != null) {
-          existingResponses[response.question_id] = response.answer;
-          logger.debug(
-            `Existing answer for question id ${response.question_id} is/are : ${response.answer}`
-          );
+    questionWithOptions.forEach((qwo) => {
+      const response = qwo.existingResponse;
+      if (response && response.question_id != null) {
+        let answerValue: any = response.answer;
+
+        // Parse JSON to clean quotes and arrays
+        try {
+          answerValue = JSON.parse(answerValue);
+        } catch (e) {
+          // If not JSON, keep as-is (e.g., numeric answers)
         }
-      });
 
-      // --------------------------------------------------------------------------------------
-      // NOTE ::
-      // Frontend to utilize this existingResponses of type Record<number,any> to
-      // Either setAnswers(existingResponses);
-      // OR in other way of implementation further to populate UI with existing responses.
-      // --------------------------------------------------------------------------------------
+        existingResponses[response.question_id] = answerValue;
 
-      setQuestions(questionsArray);
-      setResponseOptions(responseOptionsArray);
-    };
-    loadQuestionsWithOptions();
-  }, [itemIdNum]);
+        logger.debug(
+          `Existing answer for question id ${response.question_id} is/are :`,
+          answerValue
+        );
+      }
+    });
+
+    setQuestions(questionsArray);
+    setResponseOptions(responseOptionsArray);
+    setAnswers(existingResponses); // <-- now all question types will highlight properly
+  };
+
+  loadQuestionsWithOptions();
+}, [itemIdNum]);
 
   useEffect(() => {
     if (questions.length > 0) {

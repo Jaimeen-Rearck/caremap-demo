@@ -21,16 +21,18 @@ const TrackCalendar: React.FC<CalendarProps> = ({
       style={{ height: 120, paddingTop: 10, paddingBottom: 10 }}
       calendarColor={palette.primary}
       startingDate={moment().subtract(3, "days")}
-      calendarHeaderStyle={{ color: "white", fontSize: 16 }}
-      dateNumberStyle={{ color: "white", fontSize: 16 }}
-      dateNameStyle={{ color: "white", fontSize: 12 }}
+      calendarHeaderStyle={{ color: palette.whiteColor, fontSize: 16 }}
+      dateNumberStyle={{ color: palette.whiteColor, fontSize: 16 }}
+      dateNameStyle={{ color: palette.whiteColor, fontSize: 12 }}
       highlightDateContainerStyle={{
-        backgroundColor: "rgba(255, 255, 255, 0.3)",
-        borderRadius: 999,
-        padding: 5,
+         borderWidth: 1,
+  borderColor: palette.whiteColor, // use hex instead of "white"
+  borderRadius: 999,
+  padding: 5,
+  backgroundColor: "transparent", // make sure no fill
       }}
       highlightDateNumberStyle={{
-        color: "white",
+        color: palette.whiteColor,
         fontWeight: "bold",
       }}
       highlightDateNameStyle={{ color: "white", fontSize: 12 }}
@@ -49,6 +51,8 @@ const TrackCalendar: React.FC<CalendarProps> = ({
       //     },
       //   ],
       // }))}
+      iconContainer={{ flex: 0.05 }} // keep spacing small
+  iconStyle={{ tintColor: "#FFFFFF" }}
     />
   );
 };
