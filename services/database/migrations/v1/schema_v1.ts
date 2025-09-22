@@ -209,6 +209,7 @@ export interface TrackItemEntry {
   patient_id: number;
   track_item_id: number;
   date: Date;
+  status: "active" | "inactive";
   created_date: Date;
   updated_date: Date;
 }

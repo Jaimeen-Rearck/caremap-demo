@@ -49,3 +49,18 @@ export interface QuestionWithOptions {
   options: ResponseOption[];
   existingResponse?: TrackResponse;
 }
+
+export interface CustomGoalQuestion {
+  text: string;
+  type: string;
+  required: boolean;
+  options?: string[];
+}
+
+export interface CustomGoalParams {
+  name: string;
+  userId: string;
+  patientId: number;
+  date: string;
+  questions: CustomGoalQuestion[];
+}

@@ -12,6 +12,7 @@ const palette = {
   heading: "#378793",
   progressBar: "#08B828",
   trackCardBackground: "#E6F5FC",
+  whiteColor:"#FFFFFF"
 };
 
 export default palette;
