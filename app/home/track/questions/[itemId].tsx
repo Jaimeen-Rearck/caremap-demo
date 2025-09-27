@@ -4,7 +4,12 @@ import { useCustomToast } from "@/components/shared/useCustomToast";
 import { PatientContext } from "@/context/PatientContext";
 import { TrackContext } from "@/context/TrackContext";
 import { UserContext } from "@/context/UserContext";
-import { addOptionToQuestion, getQuestionsWithOptions, saveResponse } from "@/services/core/TrackService";
+import {
+  addOptionToQuestion,
+  getQuestionsWithOptions,
+  isQuestionVisible,
+  saveResponse,
+} from "@/services/core/TrackService";
 import {
   Question,
   ResponseOption,
@@ -48,38 +53,6 @@ export default function QuestionFlowScreen() {
     {}
   );
 
-  // Utility to check if a question is visible given current answers
-  const isQuestionVisible = (
-    q: Question,
-    answers: Record<number, any>
-  ): boolean => {
-    if (!q.parent_question_id || !q.display_condition) return true;
-
-    try {
-      const cond = JSON.parse(q.display_condition);
-      const parentAnswer = answers[q.parent_question_id];
-
-      if (cond.equals !== undefined) return parentAnswer === cond.equals;
-      if (cond.not_equals !== undefined)
-        return parentAnswer !== cond.not_equals;
-      if (cond.gt !== undefined) return Number(parentAnswer) > Number(cond.gt);
-      if (cond.gte !== undefined)
-        return Number(parentAnswer) >= Number(cond.gte);
-      if (cond.lt !== undefined) return Number(parentAnswer) < Number(cond.lt);
-      if (cond.lte !== undefined)
-        return Number(parentAnswer) <= Number(cond.lte);
-      if (cond.in !== undefined && Array.isArray(cond.in)) {
-        return cond.in.includes(parentAnswer);
-      }
-      if (cond.not_in !== undefined && Array.isArray(cond.not_in)) {
-        return !cond.not_in.includes(parentAnswer);
-      }
-      return true;
-    } catch {
-      return true;
-    }
-  };
-
   // Compute visibleQuestions dynamically (no separate state needed)
   const visibleQuestions = questions.filter((q) =>
     isQuestionVisible(q, answers)
@@ -92,14 +65,14 @@ export default function QuestionFlowScreen() {
     visibleQuestions[visibleQuestions.length - 1].id === currentQuestion.id;
 
   useEffect(() => {
-  if (!user) {
-    router.replace(ROUTES.LOGIN);
-    return;
-  }
-  if (!patient) {
-    router.replace(ROUTES.MY_HEALTH);
-    return;
-  }
+    if (!user) {
+      router.replace(ROUTES.LOGIN);
+      return;
+    }
+    if (!patient) {
+      router.replace(ROUTES.MY_HEALTH);
+      return;
+    }
 
     const loadQuestionsWithOptions = async () => {
       if (!itemIdNum) return;
@@ -108,39 +81,41 @@ export default function QuestionFlowScreen() {
         entryIdNum
       );
 
-    const questionsArray = questionWithOptions.map((qwo) => qwo.question);
-    const responseOptionsArray = questionWithOptions.flatMap((qwo) => qwo.options);
+      const questionsArray = questionWithOptions.map((qwo) => qwo.question);
+      const responseOptionsArray = questionWithOptions.flatMap(
+        (qwo) => qwo.options
+      );
 
-    const existingResponses: Record<number, any> = {};
+      const existingResponses: Record<number, any> = {};
 
-    questionWithOptions.forEach((qwo) => {
-      const response = qwo.existingResponse;
-      if (response && response.question_id != null) {
-        let answerValue: any = response.answer;
+      questionWithOptions.forEach((qwo) => {
+        const response = qwo.existingResponse;
+        if (response && response.question_id != null) {
+          let answerValue: any = response.answer;
 
-        // Parse JSON to clean quotes and arrays
-        try {
-          answerValue = JSON.parse(answerValue);
-        } catch (e) {
-          // If not JSON, keep as-is (e.g., numeric answers)
+          // Parse JSON to clean quotes and arrays
+          try {
+            answerValue = JSON.parse(answerValue);
+          } catch (e) {
+            // If not JSON, keep as-is (e.g., numeric answers)
+          }
+
+          existingResponses[response.question_id] = answerValue;
+
+          logger.debug(
+            `Existing answer for question id ${response.question_id} is/are :`,
+            answerValue
+          );
         }
+      });
 
-        existingResponses[response.question_id] = answerValue;
+      setQuestions(questionsArray);
+      setResponseOptions(responseOptionsArray);
+      setAnswers(existingResponses); // <-- now all question types will highlight properly
+    };
 
-        logger.debug(
-          `Existing answer for question id ${response.question_id} is/are :`,
-          answerValue
-        );
-      }
-    });
-
-    setQuestions(questionsArray);
-    setResponseOptions(responseOptionsArray);
-    setAnswers(existingResponses); // <-- now all question types will highlight properly
-  };
-
-  loadQuestionsWithOptions();
-}, [itemIdNum]);
+    loadQuestionsWithOptions();
+  }, [itemIdNum]);
 
   useEffect(() => {
     if (questions.length > 0) {

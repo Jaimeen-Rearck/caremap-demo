@@ -1,7 +1,9 @@
-import { QuestionWithOptions, TrackCategoryWithItems, TrackCategoryWithSelectableItems, TrackItemWithProgress, CustomGoalParams } from '@/services/common/types';
+import { QuestionCondition, QuestionType } from '@/constants/trackTypes';
+import { CustomGoalParams, QuestionWithOptions, TrackCategoryWithItems, TrackCategoryWithSelectableItems, TrackItemWithProgress } from '@/services/common/types';
 import { getCurrentTimestamp } from '@/services/core/utils';
 import { useModel } from '@/services/database/BaseModel';
-import { tables } from '@/services/database/migrations/v1/schema_v1';
+import { Question, tables } from '@/services/database/migrations/v1/schema_v1';
+import { PatientModel } from '@/services/database/models/PatientModel';
 import { QuestionModel } from '@/services/database/models/QuestionModel';
 import { ResponseOptionModel } from '@/services/database/models/ResponseOptionModel';
 import { TrackCategoryModel } from '@/services/database/models/TrackCategoryModel';
@@ -9,7 +11,6 @@ import { TrackItemEntryModel } from '@/services/database/models/TrackItemEntryMo
 import { TrackItemModel } from '@/services/database/models/TrackItemModel';
 import { TrackResponseModel } from '@/services/database/models/TrackResponseModel';
 import { logger } from '@/services/logging/logger';
-import { PatientModel } from '@/services/database/models/PatientModel';
 
 // Single shared instance of models
 const trackCategoryModel = new TrackCategoryModel();
@@ -75,7 +76,6 @@ async function ensureSubscribedEntries(patientId: number, date: string): Promise
             WHERE tc.status = 'active'
               AND ti.status = 'active'
               AND tie.patient_id = ?
-              AND tie.status = 'active'
         `, [patientId]);
         return rows as { id: number; frequency: 'daily' | 'weekly' | 'monthly' }[];
     });
@@ -101,14 +101,17 @@ async function ensureSubscribedEntries(patientId: number, date: string): Promise
                     patient_id: patientId,
                     track_item_id: item.id,
                     date: normalizedDate,
-                    status: 'active' as any,
+                    // status: 'active' as any,
                     created_date: now,
                     updated_date: now,
                 });
             } else if ((existing as any).status !== 'active') {
                 // Reactivate if present but inactive
                 await model.updateByFields(
-                    { status: 'active' as any, updated_date: now },
+                    {
+                        // status: 'active' as any, 
+                        updated_date: now
+                    },
                     { id: (existing as any).id }
                 );
             }
@@ -392,7 +395,10 @@ export const addTrackItemOnDate = async (
         if (existing) {
             // Reactivate if previously inactive
             await model.updateByFields(
-                { status: 'active' as any, updated_date: now },
+                {
+                    // status: 'active' as any, 
+                    updated_date: now
+                },
                 { id: (existing as any).id }
             );
             logger.debug('linkItemToPatientDate: Item reactivated', { itemId, patientId, date: normalizedDate });
@@ -404,7 +410,7 @@ export const addTrackItemOnDate = async (
             patient_id: patientId,
             track_item_id: itemId,
             date: normalizedDate,
-            status: 'active' as any,
+            // status: 'active' as any,
             created_date: now,
             updated_date: now,
         });
@@ -425,7 +431,10 @@ export const removeTrackItemFromDate = async (
     // Deactivate all entries for this item/patient (both past and future) and preserve responses
     await useModel(trackItemEntryModel, async (model) => {
         await model.updateByFields(
-            { status: 'inactive' as any, updated_date: now },
+            {
+                // status: 'inactive' as any, 
+                updated_date: now
+            },
             { track_item_id: itemId, patient_id: patientId }
         );
     });
@@ -477,62 +486,75 @@ export const getSummariesForItem = async (entryId: number): Promise<string[]> =>
     });
 };
 
+/**
+ * ------------------------------------------------------------------------------------------------------------
+ * NOTE: Conditional logic previously used value-based checks, e.g., {"equals": "yes"}.
+ * Now updated to use option codes instead, e.g., {"equals": "o_yes"} for MSQ/MCQ types.
+ * Service layer update is pending and will be handled in a follow-up PR.
+ * ------------------------------------------------------------------------------------------------------------
+ */
 
-// ------------------------------------------------------------------------------------------------------------
-// NOTE: Conditional logic previously used value-based checks, e.g., {"equals": "yes"}.
-// Now updated to use option codes instead, e.g., {"equals": "o_yes"} for MSQ/MCQ types.
-// Service layer update is pending and will be handled in a follow-up PR.
-// ------------------------------------------------------------------------------------------------------------
-
-export const shouldDisplayQuestion = (
-    question: { parent_question_id?: number | null; display_condition?: string | null },
+// Utility to check if a question is visible given current answers
+export const isQuestionVisible = (
+    q: Question,
     answers: Record<number, any>
 ): boolean => {
-    // If no parent, always show
-    if (!question.parent_question_id) return true;
-
-    // If no condition, assume show
-    if (!question.display_condition) return true;
+    if (!q.parent_question_id || !q.display_condition) return true;
 
     try {
-        const parentAnswer = answers[question.parent_question_id];
-        if (parentAnswer === undefined) return false; // parent unanswered → hide
+        const cond = JSON.parse(q.display_condition);
+        const parentAnswer = answers[q.parent_question_id];
 
-        const condition = JSON.parse(question.display_condition);
-
-        switch (condition.operator) {
-            case "equals":
-                return parentAnswer === condition.value;
-
-            case "not_equals":
-                return parentAnswer !== condition.value;
-
-            case "in":
-                return Array.isArray(condition.value) && condition.value.includes(parentAnswer);
-
-            case "not_in":
-                return Array.isArray(condition.value) && !condition.value.includes(parentAnswer);
-
-            case "gt":
-                return Number(parentAnswer) > Number(condition.value);
-
-            case "lt":
-                return Number(parentAnswer) < Number(condition.value);
-
-            case "gte":
-                return Number(parentAnswer) >= Number(condition.value);
-
-            case "lte":
-                return Number(parentAnswer) <= Number(condition.value);
-
-            default:
-                return true; // unknown operator → fallback show
+        // Handle parent_answered condition using enum
+        if (cond[QuestionCondition.PARENT_RES_EXISTS] === true) {
+            return (
+                parentAnswer !== undefined &&
+                parentAnswer !== null &&
+                parentAnswer !== ""
+            );
         }
+
+        const numericAnswer = Number(parentAnswer);
+
+        // Operator checks using enum
+        const operators: [QuestionCondition, (value: any) => boolean][] = [
+            [QuestionCondition.EQ, (v) => parentAnswer === v],
+            [QuestionCondition.NOT_EQ, (v) => parentAnswer !== v],
+            [QuestionCondition.GT, (v) => numericAnswer > Number(v)],
+            [QuestionCondition.GTE, (v) => numericAnswer >= Number(v)],
+            [QuestionCondition.LT, (v) => numericAnswer < Number(v)],
+            [QuestionCondition.LTE, (v) => numericAnswer <= Number(v)],
+            [
+                QuestionCondition.IN,
+                (v) => Array.isArray(v) && v.includes(parentAnswer),
+            ],
+            [
+                QuestionCondition.NOT_IN,
+                (v) => Array.isArray(v) && !v.includes(parentAnswer),
+            ],
+        ];
+
+        for (const [key, check] of operators) {
+            if (cond[key] !== undefined) {
+                return check(cond[key]);
+            }
+        }
+
+        // No known condition matched → default visible
+        return true;
     } catch (err) {
-        console.warn("Invalid display_condition JSON:", question.display_condition, err);
+        console.warn("Invalid display_condition JSON:", q.display_condition, err);
         return true;
     }
-}
+};
+
+/**
+ * ------------------------------------------------------------------------------------------------------------
+ * Custom Goals methods :
+ * addCustomGoal() implemented
+ * Methods to support editing/updating custom goals will be added in upcoming PRs
+ * ------------------------------------------------------------------------------------------------------------
+*/
 
 export const addCustomGoal = async (params: CustomGoalParams): Promise<number> => {
     const { name, patientId, date, questions } = params;
@@ -573,7 +595,7 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
         });
 
         // If question type is mcq, msq, or boolean, add default/options
-        if (question.type === 'boolean') {
+        if (question.type === QuestionType.BOOLEAN) {
             await useModel(responseOptionModel, async (model) => {
                 await model.insert({
                     question_id: questionId,
@@ -588,7 +610,7 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
                     updated_date: now,
                 });
             });
-        } else if ((question.type === 'mcq' || question.type === 'msq') && Array.isArray(question.options)) {
+        } else if ((question.type === QuestionType.MCQ || question.type === QuestionType.MSQ) && Array.isArray(question.options)) {
             const cleanOptions = question.options.filter((o) => !!o && o.trim().length > 0);
             if (cleanOptions.length > 0) {
                 await useModel(responseOptionModel, async (model) => {
