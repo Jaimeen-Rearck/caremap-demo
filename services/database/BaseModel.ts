@@ -156,6 +156,45 @@ export abstract class BaseModel<T> {
         return result;
     }
 
+async upsertByFields(
+    data: Partial<T>,
+    conditions: Partial<T>
+): Promise<any> {
+    const dataKeys = Object.keys(data);
+    const dataValues = Object.values(data);
+
+    const whereKeys = Object.keys(conditions);
+    const whereValues = Object.values(conditions);
+
+    if (!dataKeys.length || !whereKeys.length) {
+        throw new Error("Upsert failed: missing fields or conditions.");
+    }
+
+    // First try update
+    const setClause = dataKeys.map(key => `${key} = ?`).join(", ");
+    const whereClause = whereKeys.map(key => `${key} = ?`).join(" AND ");
+    const updateSql = `UPDATE ${this.tableName} SET ${setClause} WHERE ${whereClause}`;
+    const updateValues = [...dataValues, ...whereValues];
+
+    const result = await this.run(updateSql, updateValues);
+
+    // If no rows affected → insert instead
+    if (result.changes === 0) {
+        const allKeys = [...dataKeys, ...whereKeys];
+        const allValues = [...dataValues, ...whereValues];
+        const placeholders = allKeys.map(() => "?").join(", ");
+
+        const insertSql = `INSERT INTO ${this.tableName} (${allKeys.join(
+            ", "
+        )}) VALUES (${placeholders})`;
+
+        return this.run(insertSql, allValues);
+    }
+
+    return result;
+}
+
+
     async deleteByFields(where: Partial<T>): Promise<void> {
         const keys = Object.keys(where);
         const values = Object.values(where);

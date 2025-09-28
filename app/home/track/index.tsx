@@ -76,7 +76,7 @@ const [markedDates, setMarkedDates] = useState<string[]>([]);
         right={
           <TouchableOpacity onPress={handleAddItem} className="px-2">
             <Text className="text-white font-medium whitespace-nowrap">
-              Add item
+              {categories.some((cat) => cat.items.length > 0) ? "Edit item" : "Add item"}
             </Text>
           </TouchableOpacity>
         }
@@ -101,7 +101,7 @@ const [markedDates, setMarkedDates] = useState<string[]>([]);
               <View key={cat.id} className="mb-6">
                 {/* Category title */}
                 <Text
-                  className="font-bold text-lg mb-2"
+                  className="font-bold text-xl mb-2"
                   style={{ color: palette.heading }}
                 >
                   {cat.name}
@@ -109,7 +109,10 @@ const [markedDates, setMarkedDates] = useState<string[]>([]);
 
                 {/* Items under this category */}
                 {cat.items.map((itm) => (
+                  
                   <TrackCard
+                  
+                  summaries={itm.summaries ?? []} 
                     key={itm.item.id}
                     item_id={itm.item.id}
                     entry_id={itm.entry_id}
@@ -117,7 +120,7 @@ const [markedDates, setMarkedDates] = useState<string[]>([]);
                     completed={itm.completed}
                     total={itm.total}
                     date={currentSelectedDate.format("MM-DD-YYYY")}
-                  />
+                    />
                 ))}
               </View>
             ) : null
