@@ -1,10 +1,14 @@
+import { isValidEnumValue } from "@/constants/enumValidator";
+import { NumericSubtype, QuestionType, TrackingFrequency } from "@/constants/trackTypes";
+import { Units } from "@/constants/units";
 import predefinedConfig from "@/services/config/track-config.json";
-import { shouldSync, updateStoredVersion } from "@/services/config/track-version-manager";
 import { useModel } from "@/services/database/BaseModel";
 import { QuestionModel } from "@/services/database/models/QuestionModel";
 import { ResponseOptionModel } from "@/services/database/models/ResponseOptionModel";
 import { TrackCategoryModel } from "@/services/database/models/TrackCategoryModel";
 import { TrackItemModel } from "@/services/database/models/TrackItemModel";
+import { isQuestionSkipped, markQuestionAsSkipped, resetSkippedRegistry } from "@/services/database/track-sync/sync-helpers";
+import { shouldSync, updateStoredVersion } from "@/services/database/track-sync/track-version-manager";
 import { logger } from "@/services/logging/logger";
 
 // ---- Declare reusable models ----
@@ -13,12 +17,13 @@ const itemModel = new TrackItemModel();
 const questionModel = new QuestionModel();
 const optionModel = new ResponseOptionModel();
 
-// ---- Wrapper to simplify useModel usage ----
+// Simplifies model usage by injecting it into an async callback.
 async function withModel<M, R>(model: M, fn: (m: M) => Promise<R>): Promise<R> {
     return useModel(model, fn);
 }
 
 // ---- Cascade & other helpers ----
+// Recursively deactivates a category and all its related items and questions.
 async function cascadeDeactivateCategory(categoryCode: string) {
     const categoryId = await resolveCategoryId(categoryCode);
     if (!categoryId) return;
@@ -38,7 +43,7 @@ async function cascadeDeactivateCategory(categoryCode: string) {
     });
 }
 
-
+// Recursively deactivates an item and all its related questions.
 async function cascadeDeactivateItem(itemCode: string) {
     const itemId = await resolveItemId(itemCode);
     if (!itemId) return;
@@ -58,7 +63,7 @@ async function cascadeDeactivateItem(itemCode: string) {
     });
 }
 
-
+// Recursively deactivates a question, its options, and all child questions.
 async function cascadeDeactivateQuestion(questionCode: string) {
     const questionId = await resolveQuestionId(questionCode);
     if (!questionId) return;
@@ -83,7 +88,7 @@ async function cascadeDeactivateQuestion(questionCode: string) {
     });
 }
 
-
+// Deactivates questions referencing invalid display conditions based on current valid option codes.
 async function deactivateQuestionsWithInvalidDisplayConditions(validOptionCodes: string[]) {
     const allQuestions = await withModel(questionModel, (qm) => qm.getAll());
 
@@ -113,7 +118,7 @@ async function deactivateQuestionsWithInvalidDisplayConditions(validOptionCodes:
     }
 }
 
-
+// Deactivates an option and all questions that depend on it via display conditions.
 async function cascadeDeactivateOption(optionCode: string) {
     // 1. Deactivate the option itself
     await withModel(optionModel, async (om) => {
@@ -150,6 +155,7 @@ async function cascadeDeactivateOption(optionCode: string) {
 }
 
 // --- Helpers to resolve ids ---
+// Resolves and returns a category ID by its code, or null if not found.
 async function resolveCategoryId(code: string): Promise<number | null> {
     return withModel(categoryModel, async (cm) => {
         const cat = await cm.getFirstByFields({ code });
@@ -157,6 +163,7 @@ async function resolveCategoryId(code: string): Promise<number | null> {
     });
 }
 
+// Resolves and returns an item ID by its code, or null if not found.
 async function resolveItemId(code: string): Promise<number | null> {
     return withModel(itemModel, async (im) => {
         const item = await im.getFirstByFields({ code });
@@ -164,6 +171,7 @@ async function resolveItemId(code: string): Promise<number | null> {
     });
 }
 
+// Resolves and returns a question ID by its code, or null if not found.
 async function resolveQuestionId(code: string): Promise<number | null> {
     return withModel(questionModel, async (qm) => {
         const q = await qm.getFirstByFields({ code });
@@ -173,6 +181,7 @@ async function resolveQuestionId(code: string): Promise<number | null> {
 
 
 // ---- Upserts ----
+// Inserts or updates a category ensuring it is active.
 async function upsertCategory(category: any) {
     await withModel(categoryModel, async (cm) => {
         await cm.upsertByFields(
@@ -185,10 +194,17 @@ async function upsertCategory(category: any) {
     });
 }
 
+// Inserts or updates an item and associates it with a valid category.
 async function upsertItem(item: any) {
     const categoryId = await resolveCategoryId(item.category_code);
     if (!categoryId) {
         console.warn(`Skipping Item ${item.code} → parent category not found`);
+        return;
+    }
+
+    // Validation for frequency
+    if (item.frequency && !isValidEnumValue(TrackingFrequency, item.frequency)) {
+        console.error(`Sync skipped: Invalid frequency for Item "${item.code}": "${item.frequency}" !`);
         return;
     }
 
@@ -207,12 +223,18 @@ async function upsertItem(item: any) {
 
 
 /**
- * Upsert single question (safe).
- * - If DB row exists and structural fields changed -> log violation, cascade-deactivate DB row and return (skip re-activation).
- * - Otherwise update non-structural fields or insert new row.
- * - If parent_question_code is provided but parent is not active, skip and log.
+ * Safely inserts or updates a question.
+ * Skips questions if structural changes exist, or if parent question/item is missing/inactive.
+ * Updates non-structural fields if applicable and ensures active status.
  */
 async function upsertQuestion(itemCode: string, question: any): Promise<void> {
+
+    if (isQuestionSkipped(question.parent_question_code || "")) {
+        console.warn(`Skipping Question ${question.code} → parent question ${question.parent_question_code} was structurally violated`);
+        markQuestionAsSkipped(question.code);
+        return;
+    }
+
     // Resolve item id first
     const itemId = await resolveItemId(itemCode);
     if (!itemId) {
@@ -247,36 +269,68 @@ async function upsertQuestion(itemCode: string, question: any): Promise<void> {
         parentQuestionId = parentRow.id;
     }
 
+
+    // ENUM VALIDATION BLOCK — check that enum fields are valid
+    if (!isValidEnumValue(QuestionType, question.type)) {
+        console.error(`Sync skipped: Invalid type for Question "${question.code}": "${question.type}" !`);
+        return;
+    }
+
+    if (question.subtype && !isValidEnumValue(NumericSubtype, question.subtype)) {
+        console.error(`Sync skipped: Invalid subtype for Question "${question.code}": ${question.subtype}"  !`);
+        return;
+    }
+
+    if (question.units && !isValidEnumValue(Units, question.units)) {
+        console.error(`Sync skipped: Invalid units for Question "${question.code}": "${question.units}" !`);
+        return;
+    }
+
+
     // Now do safe upsert by checking existing DB row first (by code)
     await withModel(questionModel, async (qm) => {
         const existing = await qm.getFirstByFields({ code: question.code });
 
         if (existing) {
+
+            let existingDisplayCondition = existing.display_condition;
+            let questionDisplayCondition = question.display_condition;
+
+            try {
+                existingDisplayCondition = typeof existing.display_condition === "string"
+                    ? JSON.parse(existing.display_condition)
+                    : existing.display_condition;
+            } catch { }
+
             // === structural fields (breaking) ===
             // Consider text, type, parent_question_id, display_condition as structural
             const structuralViolation =
-                existing.type !== question.type ||
+                existing.type !== (question.type as QuestionType) ||
                 existing.text !== question.text ||
                 // existing.parent_question_id may be a number or null
                 (existing.parent_question_id || null) !== (parentQuestionId || null) ||
-                (existing.display_condition || null) !== (question.display_condition || null);
+                JSON.stringify(existingDisplayCondition) !== JSON.stringify(questionDisplayCondition);
+
+            // Before doing anything, check if parent was skipped
+            if (question.parent_question_code && isQuestionSkipped(question.parent_question_code)) {
+                console.warn(`Skipping Question ${question.code} → parent ${question.parent_question_code} was structurally violated`);
+                return;
+            }
 
             if (structuralViolation) {
                 // Deactivate the existing DB row and cascade-deactivate children/options
-                console.error(
-                    `Violation: Question ${question.code} structural fields changed. Deactivating with cascade.`
-                );
-                // Use your cascade helper (which expects a question code)
-                await cascadeDeactivateQuestion(question.code);
-                // Skip updating/re-activating this DB row. Caller should use new code in config if intended.
+                console.error(`Sync skipped: Question ${question.code} configuration does not meet required conditions.`);
+                markQuestionAsSkipped(question.code);
+
+                // Case : Structural violation → skip parent + skip children (no cascade, no update)
                 return;
             }
 
             // === Non-structural updates allowed: update only those fields ===
             const nonStructuralUpdates: any = {};
             // Allowed to update: subtype, units, min, max, precision, instructions, required, summary_template, etc.
-            if (existing.subtype !== question.subtype) nonStructuralUpdates.subtype = question.subtype;
-            if (existing.units !== question.units) nonStructuralUpdates.units = question.units;
+            if (existing.subtype !== (question.subtype as NumericSubtype)) nonStructuralUpdates.subtype = question.subtype as NumericSubtype;
+            if (existing.units !== question.units as Units) nonStructuralUpdates.units = question.units as Units;
             if ((existing.min ?? null) !== (question.min ?? null)) nonStructuralUpdates.min = question.min;
             if ((existing.max ?? null) !== (question.max ?? null)) nonStructuralUpdates.max = question.max;
             if ((existing.precision ?? null) !== (question.precision ?? null)) nonStructuralUpdates.precision = question.precision;
@@ -289,7 +343,11 @@ async function upsertQuestion(itemCode: string, question: any): Promise<void> {
             // If there are updates, apply them and ensure status is active.
             if (Object.keys(nonStructuralUpdates).length > 0 || existing.status !== "active") {
                 await qm.updateByFields(
-                    { ...nonStructuralUpdates, status: "active" },
+                    {
+                        ...nonStructuralUpdates,
+                        status: "active",
+                        display_condition: question.display_condition ? JSON.stringify(question.display_condition) : null
+                    },
                     { id: existing.id }
                 );
                 logger.debug(`Updated question (non-breaking) or reactivated: ${question.code}`);
@@ -310,9 +368,9 @@ async function upsertQuestion(itemCode: string, question: any): Promise<void> {
             await qm.insert({
                 code: question.code,
                 text: question.text,
-                type: question.type,
-                subtype: question.subtype ?? null,
-                units: question.units ?? null,
+                type: question.type as QuestionType,
+                subtype: question.subtype as NumericSubtype ?? null,
+                units: question.units as Units ?? null,
                 min: question.min ?? null,
                 max: question.max ?? null,
                 precision: question.precision ?? null,
@@ -320,7 +378,7 @@ async function upsertQuestion(itemCode: string, question: any): Promise<void> {
                 required: question.required,
                 summary_template: question.summary_template,
                 parent_question_id: parentQuestionId,
-                display_condition: question.display_condition,
+                display_condition: question.display_condition ? JSON.stringify(question.display_condition) : null,
                 item_id: itemId,
                 status: "active"
             });
@@ -336,8 +394,14 @@ async function upsertQuestion(itemCode: string, question: any): Promise<void> {
     });
 }
 
-
+// Inserts or updates an option linked to an active parent question.
 async function upsertOption(questionCode: string, option: any) {
+
+    if (isQuestionSkipped(questionCode)) {
+        console.warn(`Skipping Option ${option.code} → parent question ${questionCode} was structurally violated`);
+        return;
+    }
+
     const questionRow = await withModel(questionModel, (qm) =>
         qm.getFirstByFields({ code: questionCode })
     );
@@ -360,10 +424,8 @@ async function upsertOption(questionCode: string, option: any) {
     });
 }
 
-
-
-
 // ---- Inactivation of missing entities ----
+// Deactivates categories missing from the latest configuration.
 async function deactivateMissingCategories(configCategoryCodes: string[]) {
     const categories = await withModel(categoryModel, (cm) => cm.getAll());
     for (const c of categories) {
@@ -373,6 +435,7 @@ async function deactivateMissingCategories(configCategoryCodes: string[]) {
     }
 }
 
+// Deactivates items missing from the latest configuration.
 async function deactivateMissingItems(configItemCodes: string[]) {
     const items = await withModel(itemModel, (im) => im.getAll());
     for (const i of items) {
@@ -382,6 +445,7 @@ async function deactivateMissingItems(configItemCodes: string[]) {
     }
 }
 
+// Deactivates questions missing from the latest configuration.
 async function deactivateMissingQuestions(configQuestionCodes: string[]) {
     const questions = await withModel(questionModel, (qm) => qm.getAll());
     for (const q of questions) {
@@ -391,17 +455,42 @@ async function deactivateMissingQuestions(configQuestionCodes: string[]) {
     }
 }
 
+// Deactivates options missing from the latest configuration and cascades deactivation for dependent questions.
 async function deactivateMissingOptions(configOptionCodes: string[]) {
     const options = await withModel(optionModel, (om) => om.getAll());
+
     for (const o of options) {
         if (!configOptionCodes.includes(o.code)) {
             await cascadeDeactivateOption(o.code);
+            logger.debug(`Deactivated missing option ${o.code}`);
+
+            // Minimal extra: deactivate child questions if no active options remain
+            const questionId = o.question_id;
+            const remainingOptions = await withModel(optionModel, (om) =>
+                om.getByFields({ question_id: questionId, status: "active" })
+            );
+
+            if (!remainingOptions.length) {
+                // cascade deactivate children of this question
+                await withModel(questionModel, async (qm) => {
+                    const children = await qm.getByFields({ parent_question_id: questionId });
+                    for (const child of children) {
+                        await cascadeDeactivateQuestion(child.code);
+                        logger.debug(`Cascade deactivated child question ${child.code} (no active parent options)`);
+                    }
+                });
+            }
         }
     }
 }
 
+
 // ---- Main sync entrypoint ----
+// Synchronizes the track configuration by upserting active entities and deactivating missing or invalid ones.
 export async function syncTrackConfig() {
+
+    resetSkippedRegistry();
+
     const { version } = predefinedConfig;
 
     const needSync = await shouldSync("track", version);
@@ -419,12 +508,11 @@ export async function syncTrackConfig() {
             await upsertItem(item);
 
             for (const question of item.questions || []) {
-                await upsertQuestion(item.code, question);
-
-                // ✅ NEW: seed options if present
-                for (const option of question.responseOptions || []) {
-                    await upsertOption(question.code, option);
-                }
+                await upsertQuestion(item.code, {
+                    ...question,
+                    type: question.type as QuestionType,
+                    subtype: question.subtype as NumericSubtype,
+                });
             }
         }
     }

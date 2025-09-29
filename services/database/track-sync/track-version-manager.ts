@@ -2,9 +2,6 @@ import { useDB } from "@/services/database/db";
 import { TrackConfigVersion } from "@/services/database/migrations/v1/schema_v1";
 
 
-/**
- * Get stored version for a module (default 0 if not found).
- */
 export async function getStoredVersion(module: string): Promise<number> {
     return useDB(async (db) => {
         const res = await db.getFirstAsync<TrackConfigVersion>(
@@ -15,9 +12,6 @@ export async function getStoredVersion(module: string): Promise<number> {
     });
 }
 
-/**
- * Update stored version after successful sync.
- */
 export async function updateStoredVersion(
     module: string,
     version: number
@@ -32,9 +26,6 @@ export async function updateStoredVersion(
     });
 }
 
-/**
- * Check whether sync is required by comparing stored vs config version.
- */
 export async function shouldSync(
     module: string,
     configVersion: number
