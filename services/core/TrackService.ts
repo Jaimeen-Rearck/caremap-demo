@@ -76,6 +76,7 @@ async function ensureSubscribedEntries(patientId: number, date: string): Promise
             WHERE tc.status = 'active'
               AND ti.status = 'active'
               AND tie.patient_id = ?
+              AND tie.selected = 'active'
         `, [patientId]);
         return rows as { id: number; frequency: 'daily' | 'weekly' | 'monthly' }[];
     });
@@ -101,7 +102,7 @@ async function ensureSubscribedEntries(patientId: number, date: string): Promise
                     patient_id: patientId,
                     track_item_id: item.id,
                     date: normalizedDate,
-                    // status: 'active' as any,
+                    selected: 'active',
                     created_date: now,
                     updated_date: now,
                 });
@@ -109,7 +110,7 @@ async function ensureSubscribedEntries(patientId: number, date: string): Promise
                 // Reactivate if present but inactive
                 await model.updateByFields(
                     {
-                        // status: 'active' as any, 
+                        selected: 'active',
                         updated_date: now
                     },
                     { id: (existing as any).id }
@@ -153,7 +154,7 @@ export const getTrackCategoriesWithItemsAndProgress = async (
           ON tie.track_item_id = ti.id
          AND tie.patient_id = ?
          AND tie.date = ?
-         AND tie.status = 'active'
+         AND tie.selected = 'active'
         LEFT JOIN ${tables.QUESTION} q
           ON q.item_id = ti.id AND q.status = 'active'
         LEFT JOIN ${tables.TRACK_RESPONSE} r
@@ -229,7 +230,7 @@ export const getAllCategoriesWithSelectableItems = async (
                         SELECT 1 FROM ${tables.TRACK_ITEM_ENTRY} tie2
                         WHERE tie2.track_item_id = ti.id
                           AND tie2.patient_id = ?
-                          AND tie2.status = 'active'
+                          AND tie2.selected = 'active'
                     ) THEN 1 ELSE 0 END AS selected
                 FROM ${tables.TRACK_ITEM} ti
                 INNER JOIN ${tables.TRACK_CATEGORY} tc ON tc.id = ti.category_id AND tc.status = 'active'
@@ -396,7 +397,7 @@ export const addTrackItemOnDate = async (
             // Reactivate if previously inactive
             await model.updateByFields(
                 {
-                    // status: 'active' as any, 
+                    selected: 'active',
                     updated_date: now
                 },
                 { id: (existing as any).id }
@@ -410,7 +411,7 @@ export const addTrackItemOnDate = async (
             patient_id: patientId,
             track_item_id: itemId,
             date: normalizedDate,
-            // status: 'active' as any,
+            selected: 'active',
             created_date: now,
             updated_date: now,
         });
@@ -432,7 +433,7 @@ export const removeTrackItemFromDate = async (
     await useModel(trackItemEntryModel, async (model) => {
         await model.updateByFields(
             {
-                // status: 'inactive' as any, 
+                selected: 'inactive',
                 updated_date: now
             },
             { track_item_id: itemId, patient_id: patientId }
