@@ -1,3 +1,6 @@
+import { NumericSubtype, QuestionType, TrackingFrequency } from "@/constants/trackTypes";
+import { Units } from "@/constants/units";
+
 export interface User {
   id: string;
   email: string;
@@ -153,7 +156,7 @@ export interface TrackItem {
   category_id: number;
   code: string;
   name: string;
-  frequency: "daily" | "weekly" | "monthly";
+  frequency: TrackingFrequency;
   status: "active" | "inactive";
   created_date: Date;
   updated_date: Date;
@@ -164,7 +167,7 @@ export interface Question {
   item_id: number;
   code: string;
   text: string;
-  type: "boolean" | "mcq" | "msq" | "numeric" | "text";
+  type: QuestionType;
   required: boolean;
   summary_template?: string;
   status: "active" | "inactive";
@@ -173,8 +176,8 @@ export interface Question {
 
   // optional metadata fields
   instructions?: string;
-  subtype?: "integer" | "decimal";
-  units?: string;
+  subtype?: NumericSubtype;
+  units?: Units;
   min?: number;
   max?: number;
   precision?: number;
@@ -209,15 +212,14 @@ export interface TrackItemEntry {
   patient_id: number;
   track_item_id: number;
   date: Date;
-  status: "active" | "inactive";
   created_date: Date;
   updated_date: Date;
 }
 
-export interface TrackConfigVersion{
-  module:string;
-  version:number;
-  last_synced_at:string | null;
+export interface TrackConfigVersion {
+  module: string;
+  version: number;
+  last_synced_at: string | null;
 }
 
 export interface Contact {
