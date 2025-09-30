@@ -62,5 +62,7 @@ export interface CustomGoalParams {
   userId: string;
   patientId: number;
   date: string;
+  frequency: "daily" | "weekly" | "monthly";
+  code: string;
   questions: CustomGoalQuestion[];
 }
