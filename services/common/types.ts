@@ -1,3 +1,4 @@
+import { TrackingFrequency } from "@/constants/trackTypes";
 import { Question, ResponseOption, TrackCategory, TrackItem, TrackResponse } from "@/services/database/migrations/v1/schema_v1";
 
 export type AuthTokens = {
@@ -62,7 +63,7 @@ export interface CustomGoalParams {
   userId: string;
   patientId: number;
   date: string;
-  frequency: "daily" | "weekly" | "monthly";
+  frequency: TrackingFrequency;
   code: string;
   questions: CustomGoalQuestion[];
 }

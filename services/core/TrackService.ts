@@ -1,4 +1,4 @@
-import { QuestionCondition, QuestionType } from '@/constants/trackTypes';
+import { QuestionCondition, QuestionType, TrackingFrequency } from '@/constants/trackTypes';
 import { CustomGoalParams, QuestionWithOptions, TrackCategoryWithItems, TrackCategoryWithSelectableItems, TrackItemWithProgress } from '@/services/common/types';
 import { getCurrentTimestamp } from '@/services/core/utils';
 import { useModel } from '@/services/database/BaseModel';
@@ -45,19 +45,19 @@ function getMonday(d: Date): Date {
     return date;
 }
 
-export function normalizeDateByFrequency(dateStr: string, frequency: 'daily' | 'weekly' | 'monthly'): string {
+export function normalizeDateByFrequency(dateStr: string, frequency: TrackingFrequency): string {
     const date = parseMMDDYYYY(dateStr);
-    if (frequency === 'daily') return formatMMDDYYYY(date);
-    if (frequency === 'weekly') return formatMMDDYYYY(getMonday(date));
+    if (frequency === TrackingFrequency.DAILY) return formatMMDDYYYY(date);
+    if (frequency === TrackingFrequency.WEEKLY) return formatMMDDYYYY(getMonday(date));
     // monthly
     const first = new Date(date.getFullYear(), date.getMonth(), 1);
     return formatMMDDYYYY(first);
 }
 
-function shouldCreateEntryForDate(dateStr: string, frequency: 'daily' | 'weekly' | 'monthly'): boolean {
+function shouldCreateEntryForDate(dateStr: string, frequency: TrackingFrequency): boolean {
     const d = parseMMDDYYYY(dateStr);
-    if (frequency === 'daily') return true;
-    if (frequency === 'weekly') {
+    if (frequency === TrackingFrequency.DAILY) return true;
+    if (frequency === TrackingFrequency.WEEKLY) {
         return d.getDay() === 1; // Monday
     }
     return d.getDate() === 1; // Monthly -> 1st
@@ -78,7 +78,7 @@ async function ensureSubscribedEntries(patientId: number, date: string): Promise
               AND tie.patient_id = ?
               AND tie.selected = 1
         `, [patientId]);
-        return rows as { id: number; frequency: 'daily' | 'weekly' | 'monthly' }[];
+        return rows as { id: number; frequency: TrackingFrequency }[];
     });
 
     if (!subscribedItems.length) return;
@@ -151,6 +151,9 @@ export const getTrackCategoriesWithItemsAndProgress = async (
         FROM ${tables.TRACK_ITEM} ti
         INNER JOIN ${tables.TRACK_CATEGORY} tc
           ON tc.id = ti.category_id AND tc.status = 'active'
+        -- Only include items that have active questions
+        INNER JOIN ${tables.QUESTION} q_check
+          ON q_check.item_id = ti.id AND q_check.status = 'active'
         LEFT JOIN ${tables.TRACK_ITEM_ENTRY} tie
           ON tie.track_item_id = ti.id
          AND tie.patient_id = ?
@@ -398,7 +401,7 @@ export const addTrackItemOnDate = async (
 
     // Determine item frequency and normalize date accordingly
     const item = await useModel(trackItemModel, async (model) => model.getFirstByFields({ id: itemId }));
-    const frequency = (item?.frequency as any) || 'daily';
+    const frequency = item?.frequency || TrackingFrequency.DAILY;
     const normalizedDate = normalizeDateByFrequency(date, frequency);
 
     await useModel(trackItemEntryModel, async (model) => {
@@ -519,33 +522,44 @@ export const isQuestionVisible = (
     try {
         const cond = JSON.parse(q.display_condition);
         const parentAnswer = answers[q.parent_question_id];
+        let parsedParentAnswer;
+        
+        try {
+            parsedParentAnswer = JSON.parse(parentAnswer);
+        } catch {
+            parsedParentAnswer = parentAnswer;
+        }
 
         // Handle parent_answered condition using enum
         if (cond[QuestionCondition.PARENT_RES_EXISTS] === true) {
             return (
-                parentAnswer !== undefined &&
-                parentAnswer !== null &&
-                parentAnswer !== ""
+                parsedParentAnswer !== undefined &&
+                parsedParentAnswer !== null &&
+                parsedParentAnswer !== ""
             );
         }
 
-        const numericAnswer = Number(parentAnswer);
+        const numericAnswer = Number(parsedParentAnswer);
 
-        // Operator checks using enum
+        // Operator checks using enum - now supporting option codes
         const operators: [QuestionCondition, (value: any) => boolean][] = [
-            [QuestionCondition.EQ, (v) => parentAnswer === v],
-            [QuestionCondition.NOT_EQ, (v) => parentAnswer !== v],
-            [QuestionCondition.GT, (v) => numericAnswer > Number(v)],
-            [QuestionCondition.GTE, (v) => numericAnswer >= Number(v)],
-            [QuestionCondition.LT, (v) => numericAnswer < Number(v)],
-            [QuestionCondition.LTE, (v) => numericAnswer <= Number(v)],
+            [QuestionCondition.EQ, (v) => Array.isArray(parsedParentAnswer) ? parsedParentAnswer.includes(v) : parsedParentAnswer === v],
+            [QuestionCondition.NOT_EQ, (v) => Array.isArray(parsedParentAnswer) ? !parsedParentAnswer.includes(v) : parsedParentAnswer !== v],
+            [QuestionCondition.GT, (v) => !isNaN(numericAnswer) && numericAnswer > Number(v)],
+            [QuestionCondition.GTE, (v) => !isNaN(numericAnswer) && numericAnswer >= Number(v)],
+            [QuestionCondition.LT, (v) => !isNaN(numericAnswer) && numericAnswer < Number(v)],
+            [QuestionCondition.LTE, (v) => !isNaN(numericAnswer) && numericAnswer <= Number(v)],
             [
                 QuestionCondition.IN,
-                (v) => Array.isArray(v) && v.includes(parentAnswer),
+                (v) => Array.isArray(v) && (Array.isArray(parsedParentAnswer) ? 
+                    v.some(val => parsedParentAnswer.includes(val)) : 
+                    v.includes(parsedParentAnswer)),
             ],
             [
                 QuestionCondition.NOT_IN,
-                (v) => Array.isArray(v) && !v.includes(parentAnswer),
+                (v) => Array.isArray(v) && (Array.isArray(parsedParentAnswer) ? 
+                    !v.some(val => parsedParentAnswer.includes(val)) : 
+                    !v.includes(parsedParentAnswer)),
             ],
         ];
 
