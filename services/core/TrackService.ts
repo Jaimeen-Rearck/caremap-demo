@@ -1,8 +1,8 @@
-import { QuestionCondition, QuestionType } from '@/constants/trackTypes';
+import { QuestionCondition, QuestionType, TrackingFrequency } from '@/constants/trackTypes';
 import { CustomGoalParams, QuestionWithOptions, TrackCategoryWithItems, TrackCategoryWithSelectableItems, TrackItemWithProgress } from '@/services/common/types';
 import { getCurrentTimestamp } from '@/services/core/utils';
 import { useModel } from '@/services/database/BaseModel';
-import { Question, tables } from '@/services/database/migrations/v1/schema_v1';
+import { Question, ResponseOption, tables } from '@/services/database/migrations/v1/schema_v1';
 import { PatientModel } from '@/services/database/models/PatientModel';
 import { QuestionModel } from '@/services/database/models/QuestionModel';
 import { ResponseOptionModel } from '@/services/database/models/ResponseOptionModel';
@@ -45,19 +45,19 @@ function getMonday(d: Date): Date {
     return date;
 }
 
-export function normalizeDateByFrequency(dateStr: string, frequency: 'daily' | 'weekly' | 'monthly'): string {
+export function normalizeDateByFrequency(dateStr: string, frequency: TrackingFrequency): string {
     const date = parseMMDDYYYY(dateStr);
-    if (frequency === 'daily') return formatMMDDYYYY(date);
-    if (frequency === 'weekly') return formatMMDDYYYY(getMonday(date));
+    if (frequency === TrackingFrequency.DAILY) return formatMMDDYYYY(date);
+    if (frequency === TrackingFrequency.WEEKLY) return formatMMDDYYYY(getMonday(date));
     // monthly
     const first = new Date(date.getFullYear(), date.getMonth(), 1);
     return formatMMDDYYYY(first);
 }
 
-function shouldCreateEntryForDate(dateStr: string, frequency: 'daily' | 'weekly' | 'monthly'): boolean {
+function shouldCreateEntryForDate(dateStr: string, frequency: TrackingFrequency): boolean {
     const d = parseMMDDYYYY(dateStr);
-    if (frequency === 'daily') return true;
-    if (frequency === 'weekly') {
+    if (frequency === TrackingFrequency.DAILY) return true;
+    if (frequency === TrackingFrequency.WEEKLY) {
         return d.getDay() === 1; // Monday
     }
     return d.getDate() === 1; // Monthly -> 1st
@@ -76,8 +76,9 @@ async function ensureSubscribedEntries(patientId: number, date: string): Promise
             WHERE tc.status = 'active'
               AND ti.status = 'active'
               AND tie.patient_id = ?
+              AND tie.selected = 1
         `, [patientId]);
-        return rows as { id: number; frequency: 'daily' | 'weekly' | 'monthly' }[];
+        return rows as { id: number; frequency: TrackingFrequency }[];
     });
 
     if (!subscribedItems.length) return;
@@ -101,15 +102,15 @@ async function ensureSubscribedEntries(patientId: number, date: string): Promise
                     patient_id: patientId,
                     track_item_id: item.id,
                     date: normalizedDate,
-                    // status: 'active' as any,
+                    selected: 1,
                     created_date: now,
                     updated_date: now,
                 });
-            } else if ((existing as any).status !== 'active') {
+            } else if ((existing as any).selected !== 1) {
                 // Reactivate if present but inactive
                 await model.updateByFields(
                     {
-                        // status: 'active' as any, 
+                        selected: 1,
                         updated_date: now
                     },
                     { id: (existing as any).id }
@@ -145,22 +146,40 @@ export const getTrackCategoriesWithItemsAndProgress = async (
           ti.created_date,
           ti.updated_date,
           COUNT(DISTINCT r.question_id) AS completed,
-          COUNT(DISTINCT q.id)          AS total
+          COUNT(DISTINCT q.id)          AS total,
+          tie.selected                  AS is_selected
         FROM ${tables.TRACK_ITEM} ti
         INNER JOIN ${tables.TRACK_CATEGORY} tc
           ON tc.id = ti.category_id AND tc.status = 'active'
-        INNER JOIN ${tables.TRACK_ITEM_ENTRY} tie
+        -- Only include items that have active questions
+        INNER JOIN ${tables.QUESTION} q_check
+          ON q_check.item_id = ti.id AND q_check.status = 'active'
+        LEFT JOIN ${tables.TRACK_ITEM_ENTRY} tie
           ON tie.track_item_id = ti.id
          AND tie.patient_id = ?
          AND tie.date = ?
-         AND tie.status = 'active'
         LEFT JOIN ${tables.QUESTION} q
           ON q.item_id = ti.id AND q.status = 'active'
         LEFT JOIN ${tables.TRACK_RESPONSE} r
           ON r.track_item_entry_id = tie.id
+          AND tie.date = ?
         WHERE ti.status = 'active'
-        GROUP BY tie.id, ti.id, ti.name, ti.code, ti.frequency, ti.status, ti.category_id, ti.created_date, ti.updated_date
-      `, [patientId, date]);
+          AND (
+            (tie.selected = 1)
+            OR (
+              tie.id IS NOT NULL 
+              AND EXISTS (
+                SELECT 1 
+                FROM ${tables.TRACK_RESPONSE} r2
+                INNER JOIN ${tables.TRACK_ITEM_ENTRY} tie2
+                  ON tie2.id = r2.track_item_entry_id
+                  AND tie2.date = ? 
+                WHERE r2.track_item_entry_id = tie.id
+              )
+            )
+          )
+        GROUP BY tie.id, ti.id, ti.name, ti.code, ti.frequency, ti.status, ti.category_id, ti.created_date, ti.updated_date, tie.selected
+      `, [patientId, date, date, date]);
             return rows as any[];
         });
 
@@ -229,7 +248,7 @@ export const getAllCategoriesWithSelectableItems = async (
                         SELECT 1 FROM ${tables.TRACK_ITEM_ENTRY} tie2
                         WHERE tie2.track_item_id = ti.id
                           AND tie2.patient_id = ?
-                          AND tie2.status = 'active'
+                          AND tie2.selected = 1
                     ) THEN 1 ELSE 0 END AS selected
                 FROM ${tables.TRACK_ITEM} ti
                 INNER JOIN ${tables.TRACK_CATEGORY} tc ON tc.id = ti.category_id AND tc.status = 'active'
@@ -382,7 +401,7 @@ export const addTrackItemOnDate = async (
 
     // Determine item frequency and normalize date accordingly
     const item = await useModel(trackItemModel, async (model) => model.getFirstByFields({ id: itemId }));
-    const frequency = (item?.frequency as any) || 'daily';
+    const frequency = item?.frequency || TrackingFrequency.DAILY;
     const normalizedDate = normalizeDateByFrequency(date, frequency);
 
     await useModel(trackItemEntryModel, async (model) => {
@@ -396,7 +415,7 @@ export const addTrackItemOnDate = async (
             // Reactivate if previously inactive
             await model.updateByFields(
                 {
-                    // status: 'active' as any, 
+                    selected: 1,
                     updated_date: now
                 },
                 { id: (existing as any).id }
@@ -410,7 +429,7 @@ export const addTrackItemOnDate = async (
             patient_id: patientId,
             track_item_id: itemId,
             date: normalizedDate,
-            // status: 'active' as any,
+            selected: 1,
             created_date: now,
             updated_date: now,
         });
@@ -428,18 +447,17 @@ export const removeTrackItemFromDate = async (
 ): Promise<void> => {
     logger.debug('unlinkItemFromPatientDate called', { itemId, patientId, date });
 
-    // Deactivate all entries for this item/patient (both past and future) and preserve responses
     await useModel(trackItemEntryModel, async (model) => {
-        await model.updateByFields(
-            {
-                // status: 'inactive' as any, 
-                updated_date: now
-            },
-            { track_item_id: itemId, patient_id: patientId }
-        );
+        // 1. Mark all entries as deselected for this item and patient
+        await model.runQuery(`
+            UPDATE ${tables.TRACK_ITEM_ENTRY}
+            SET selected = 0, updated_date = ?
+            WHERE track_item_id = ?
+            AND patient_id = ?
+        `, [now, itemId, patientId]);
     });
 
-    logger.debug('unlinkItemFromPatientDate completed (soft-deleted all entries)', { itemId, patientId });
+    logger.debug('unlinkItemFromPatientDate completed (deselected all future entries and past entries without responses)', { itemId, patientId });
 };
 
 export const generateSummary = (template: string, answer: string): string | null => {
@@ -497,40 +515,86 @@ export const getSummariesForItem = async (entryId: number): Promise<string[]> =>
 // Utility to check if a question is visible given current answers
 export const isQuestionVisible = (
     q: Question,
-    answers: Record<number, any>
+    answers: Record<number, any>,
+    allQuestions?: Question[],
+    allOptions?: ResponseOption[]
 ): boolean => {
     if (!q.parent_question_id || !q.display_condition) return true;
 
     try {
         const cond = JSON.parse(q.display_condition);
         const parentAnswer = answers[q.parent_question_id];
+        let parsedParentAnswer: any;
+
+        try {
+            parsedParentAnswer = JSON.parse(parentAnswer);
+        } catch {
+            parsedParentAnswer = parentAnswer;
+        }
 
         // Handle parent_answered condition using enum
         if (cond[QuestionCondition.PARENT_RES_EXISTS] === true) {
             return (
-                parentAnswer !== undefined &&
-                parentAnswer !== null &&
-                parentAnswer !== ""
+
+                parsedParentAnswer !== undefined &&
+                parsedParentAnswer !== null &&
+                parsedParentAnswer !== "" &&
+                (!Array.isArray(parsedParentAnswer) || parsedParentAnswer.length > 0)
             );
         }
 
-        const numericAnswer = Number(parentAnswer);
+        // Find parent question to determine its type
+        const parentQuestion = allQuestions?.find(question => question.id === q.parent_question_id);
+        const parentQuestionType = parentQuestion?.type;
 
-        // Operator checks using enum
+        // Map text values to option codes for boolean, multi-choice, and multi-select questions
+        if (parentQuestionType &&
+            (parentQuestionType === QuestionType.BOOLEAN ||
+                parentQuestionType === QuestionType.MCQ ||
+                parentQuestionType === QuestionType.MSQ) &&
+            allOptions?.length) {
+
+            // Get options for the parent question
+            const parentOptions = allOptions.filter(opt => opt.question_id === q.parent_question_id);
+
+            // Map text values to option codes
+            if (Array.isArray(parsedParentAnswer)) {
+                // Handle multi-select case
+                const mappedAnswers = parsedParentAnswer.map(answer => {
+                    const matchingOption = parentOptions.find(opt => opt.text === answer);
+                    return matchingOption ? matchingOption.code : answer;
+                });
+                parsedParentAnswer = mappedAnswers;
+            } else if (typeof parsedParentAnswer === 'string') {
+                // Handle boolean and multi-choice case
+                const matchingOption = parentOptions.find(opt => opt.text === parsedParentAnswer);
+                if (matchingOption) {
+                    parsedParentAnswer = matchingOption.code;
+                }
+            }
+        }
+
+        const numericAnswer = Number(parsedParentAnswer);
+
+        // Operator checks using enum - now supporting option codes
         const operators: [QuestionCondition, (value: any) => boolean][] = [
-            [QuestionCondition.EQ, (v) => parentAnswer === v],
-            [QuestionCondition.NOT_EQ, (v) => parentAnswer !== v],
-            [QuestionCondition.GT, (v) => numericAnswer > Number(v)],
-            [QuestionCondition.GTE, (v) => numericAnswer >= Number(v)],
-            [QuestionCondition.LT, (v) => numericAnswer < Number(v)],
-            [QuestionCondition.LTE, (v) => numericAnswer <= Number(v)],
+            [QuestionCondition.EQ, (v) => Array.isArray(parsedParentAnswer) ? parsedParentAnswer.includes(v) : parsedParentAnswer === v],
+            [QuestionCondition.NOT_EQ, (v) => Array.isArray(parsedParentAnswer) ? !parsedParentAnswer.includes(v) : parsedParentAnswer !== v],
+            [QuestionCondition.GT, (v) => !isNaN(numericAnswer) && numericAnswer > Number(v)],
+            [QuestionCondition.GTE, (v) => !isNaN(numericAnswer) && numericAnswer >= Number(v)],
+            [QuestionCondition.LT, (v) => !isNaN(numericAnswer) && numericAnswer < Number(v)],
+            [QuestionCondition.LTE, (v) => !isNaN(numericAnswer) && numericAnswer <= Number(v)],
             [
                 QuestionCondition.IN,
-                (v) => Array.isArray(v) && v.includes(parentAnswer),
+                (v) => Array.isArray(v) && (Array.isArray(parsedParentAnswer) ?
+                    v.some(val => parsedParentAnswer.includes(val)) :
+                    v.includes(parsedParentAnswer)),
             ],
             [
                 QuestionCondition.NOT_IN,
-                (v) => Array.isArray(v) && !v.includes(parentAnswer),
+                (v) => Array.isArray(v) && (Array.isArray(parsedParentAnswer) ?
+                    !v.some(val => parsedParentAnswer.includes(val)) :
+                    !v.includes(parsedParentAnswer)),
             ],
         ];
 
@@ -557,8 +621,8 @@ export const isQuestionVisible = (
 */
 
 export const addCustomGoal = async (params: CustomGoalParams): Promise<number> => {
-    const { name, patientId, date, questions } = params;
-    logger.debug('addCustomGoal called', { name, patientId, date });
+    const { name, patientId, date, frequency, questions } = params;
+    logger.debug('addCustomGoal called', { name, patientId, date, frequency });
 
     // Find the Custom category ID
     const customCategoryId = await useModel(trackCategoryModel, async (model) => {
@@ -569,11 +633,17 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
         return category.id;
     });
 
+    // Generate a unique code for this track item
+    const trackItemCode = `CUSTOM_${Date.now()}`;
+
     // Create a new track item for the custom goal
     const trackItemId = await useModel(trackItemModel, async (model) => {
         const result = await model.insert({
             name,
+            code: trackItemCode,
+            frequency: frequency as any,
             category_id: customCategoryId,
+            status: 'active' as any,
             created_date: now,
             updated_date: now,
         });
@@ -581,13 +651,20 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
     });
 
     // Create questions for the custom goal
-    for (const question of questions) {
+    for (let i = 0; i < questions.length; i++) {
+        const question = questions[i];
+
+        // Generate a unique code for each question
+        const questionCode = `CUSTOM_Q_${Date.now()}_${i}`;
+
         const questionId = await useModel(questionModel, async (model) => {
             const result = await model.insert({
                 item_id: trackItemId,
+                code: questionCode,
                 text: question.text,
-                type: question.type,
+                type: question.type as any,
                 required: question.required ? 1 : 0,
+                status: 'active' as any,
                 created_date: now,
                 updated_date: now,
             });
@@ -595,29 +672,39 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
         });
 
         // If question type is mcq, msq, or boolean, add default/options
-        if (question.type === QuestionType.BOOLEAN) {
+        if (question.type === QuestionType.BOOLEAN || question.type === 'boolean') {
             await useModel(responseOptionModel, async (model) => {
                 await model.insert({
                     question_id: questionId,
+                    code: `OPTION_${Date.now()}_YES`,
                     text: 'Yes',
+                    status: 'active' as any,
                     created_date: now,
                     updated_date: now,
                 });
                 await model.insert({
                     question_id: questionId,
+                    code: `OPTION_${Date.now()}_NO`,
                     text: 'No',
+                    status: 'active' as any,
                     created_date: now,
                     updated_date: now,
                 });
             });
-        } else if ((question.type === QuestionType.MCQ || question.type === QuestionType.MSQ) && Array.isArray(question.options)) {
+        } else if (
+            question && (question.type === QuestionType.MCQ || question.type === QuestionType.MSQ || question.type === 'mcq' || question.type === 'msq') &&
+            Array.isArray(question.options)
+        ) {
             const cleanOptions = question.options.filter((o) => !!o && o.trim().length > 0);
             if (cleanOptions.length > 0) {
                 await useModel(responseOptionModel, async (model) => {
-                    for (const opt of cleanOptions) {
+                    for (let j = 0; j < cleanOptions.length; j++) {
+                        const opt = cleanOptions[j];
                         await model.insert({
                             question_id: questionId,
+                            code: `OPTION_${Date.now()}_${j}`,
                             text: opt.trim(),
+                            status: 'active' as any,
                             created_date: now,
                             updated_date: now,
                         });
@@ -626,6 +713,128 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
             }
         }
     }
-    logger.debug('addCustomGoal completed', { trackItemId, name, patientId, date });
+    logger.debug('addCustomGoal completed', { trackItemId, name, patientId, date, frequency });
     return trackItemId;
+};
+
+export const editCustomGoal = async (
+    trackItemId: number,
+    updates: {
+        name?: string;
+        questions?: {
+            id?: number;
+            text: string;
+            type: string;
+            required?: boolean;
+            options?: string[];
+        }[];
+    }
+): Promise<void> => {
+    logger.debug('editCustomGoal called', { trackItemId, updates });
+
+    // Update name if provided
+    if (updates.name) {
+        await useModel(trackItemModel, async (model) => {
+            await model.updateByFields(
+                { name: updates.name, updated_date: now },
+                { id: trackItemId }
+            );
+        });
+    }
+
+    // Handle questions
+    if (updates.questions && updates.questions.length > 0) {
+        for (const q of updates.questions) {
+            if (q.id) {
+                // Update existing question
+                await useModel(questionModel, async (model) => {
+                    await model.updateByFields(
+                        {
+                            text: q.text,
+                            type: q.type as any,
+                            required: q.required ? 1 : 0,
+                            updated_date: now,
+                        },
+                        { id: q.id }
+                    );
+                });
+
+                if (q.options) {
+                    // Replace options
+                    await useModel(responseOptionModel, async (model) => {
+                        await model.deleteByFields({ question_id: q.id as any });
+                        const opts = q.options ?? [];
+                        for (const opt of opts) {
+                            await model.insert({
+                                code: `RESP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                                question_id: q.id,
+                                text: opt.trim(),
+                                status: 'active' as any,
+                                created_date: now,
+                                updated_date: now,
+                            });
+                        }
+                    });
+                }
+            } else {
+                // Insert new question
+                const questionId = await useModel(questionModel, async (model) => {
+                    const result = await model.insert({
+                        code: `Q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                        item_id: trackItemId,
+                        text: q.text,
+                        type: q.type as any,
+                        required: q.required ? 1 : 0,
+                        status: 'active' as any,
+                        created_date: now,
+                        updated_date: now,
+                    });
+                    return result.lastInsertRowId;
+                });
+
+                if (q.options) {
+                    await useModel(responseOptionModel, async (model) => {
+                        const opts = q.options ?? [];
+                        for (const opt of opts) {
+                            await model.insert({
+                                code: `RESP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                                question_id: questionId,
+                                text: opt.trim(),
+                                status: 'active' as any,
+                                created_date: now,
+                                updated_date: now,
+                            });
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    logger.debug('editCustomGoal completed', { trackItemId });
+};
+
+export const removeCustomGoal = async (
+    trackItemId: number,
+    patientId: number
+): Promise<void> => {
+    logger.debug('removeCustomGoal called', { trackItemId, patientId });
+
+    // Deactivate the track item itself
+    await useModel(trackItemModel, async (model) => {
+        await model.updateByFields(
+            { status: 'inactive' as any, updated_date: now },
+            { id: trackItemId }
+        );
+    });
+
+    // Deactivate linked entries for this patient
+    await useModel(trackItemEntryModel, async (model) => {
+        await model.updateByFields(
+            { selected: 0 as any, updated_date: now },
+            { track_item_id: trackItemId, patient_id: patientId }
+        );
+    });
+
+    logger.debug('removeCustomGoal completed', { trackItemId, patientId });
 };
