@@ -1100,7 +1100,7 @@ export const removeCustomGoal = async (
     // Deactivate linked entries for this patient
     await useModel(trackItemEntryModel, async (model) => {
         await model.updateByFields(
-            { status: "inactive" as any, updated_date: now },
+            { selected: 0, updated_date: now },
             { track_item_id: trackItemId, patient_id: patientId }
         );
     });
