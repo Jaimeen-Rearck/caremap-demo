@@ -20,11 +20,14 @@ export default function ResponseOption({
       className={`flex-row items-center justify-between border rounded-xl py-3 px-4 mb-2
         ${selected ? "bg-cyan-100 border-cyan-400" : "bg-gray-100 border-gray-300"}`}
     >
-      <Text
+      <View className="w-3/4">
+<Text
         className={`text-[15px] ${selected ? "text-cyan-700 " : "text-gray-800"}`}
       >
         {label}
       </Text>
+      </View>
+      
 
       {selected && (
         <Icon as={CheckIcon} size="xl" style={{ color: palette.primary }} />

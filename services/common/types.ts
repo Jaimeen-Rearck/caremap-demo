@@ -1,3 +1,4 @@
+import { TrackingFrequency } from "@/constants/trackTypes";
 import { Question, ResponseOption, TrackCategory, TrackItem, TrackResponse } from "@/services/database/migrations/v1/schema_v1";
 
 export type AuthTokens = {
@@ -26,12 +27,12 @@ export interface TrackCategoryWithItems extends TrackCategory {
   items: TrackItemWithProgress[];
 };
 
-export interface TrackItemWithProgress{
+export interface TrackItemWithProgress {
   item: TrackItem;
-  entry_id:number;
+  entry_id: number;
   completed: number;
   total: number;
-  started: boolean;
+  summaries?: string[]; // item-level summaries
 };
 
 export interface TrackItemSelectable {
@@ -48,4 +49,21 @@ export interface QuestionWithOptions {
   question: Question;
   options: ResponseOption[];
   existingResponse?: TrackResponse;
+}
+
+export interface CustomGoalQuestion {
+  text: string;
+  type: string;
+  required: boolean;
+  options?: string[];
+}
+
+export interface CustomGoalParams {
+  name: string;
+  userId: string;
+  patientId: number;
+  date: string;
+  frequency: TrackingFrequency;
+  code: string;
+  questions: CustomGoalQuestion[];
 }

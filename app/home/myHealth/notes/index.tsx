@@ -5,6 +5,9 @@ import {
   TouchableOpacity,
   FlatList,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Textarea, TextareaInput } from "@/components/ui/textarea";
@@ -16,7 +19,6 @@ import {
   deletePatientNote,
 } from "@/services/core/PatientNoteService";
 import { PatientContext } from "@/context/PatientContext";
-import { Keyboard, TouchableWithoutFeedback } from "react-native";
 import { CustomAlertDialog } from "@/components/shared/CustomAlertDialog";
 import Header from "@/components/shared/Header";
 import ActionPopover from "@/components/shared/ActionPopover";
@@ -25,6 +27,9 @@ import { PatientNote } from "@/services/database/migrations/v1/schema_v1";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { CalendarDaysIcon, Icon } from "@/components/ui/icon";
 import { router } from "expo-router";
+import { logger } from "@/services/logging/logger";
+import { Divider } from "@/components/ui/divider";
+import { CustomButton } from "@/components/shared/CustomButton";
 
 export default function Notes() {
   const { patient } = useContext(PatientContext);
@@ -43,7 +48,7 @@ export default function Notes() {
 
   async function fetchNotes() {
     if (!patient?.id) {
-      console.log("No patient id found");
+      logger.debug("No patient id found");
       return;
     }
     try {
@@ -51,7 +56,7 @@ export default function Notes() {
       console.log(notes);
       setPatientNotes(notes);
     } catch (e) {
-      console.log(e);
+      logger.debug(String(e));
     }
   }
 
@@ -115,32 +120,32 @@ export default function Notes() {
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
-      <Header title="Notes"
-      right={
-                      <TouchableOpacity onPress={() => router.back()}>
-                        <Text className="text-white font-medium">Cancel</Text>
-                      </TouchableOpacity>
-                    }
-                     />
+      <Header
+        title="Notes"
+        right={
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text className="text-white font-medium">Cancel</Text>
+          </TouchableOpacity>
+        }
+      />
 
-      <View className="px-6 pt-8 flex-1">
+      <View className="px-5 pt-5 flex-1">
         {/* Heading*/}
-        <View>
+        <View className="flex-1">
           <Text
-            className="text-lg font-semibold"
+            className="text-xl font-semibold"
             style={{ color: palette.heading }}
           >
-            Enter any notes or questions regarding your care
+            Enter notes or questions regarding your care
           </Text>
 
-          {/* hr */}
-          <View className="h-px bg-gray-300 my-3" />
+          <Divider className="bg-gray-300 my-3" />
 
           <View className="flex-row justify-between mb-2 px-2">
             <Text className="text-gray-500">Topic</Text>
             <Text className="text-gray-500">Reminder Date</Text>
           </View>
-          <View>
+          <View className="flex-1">
             <FlatList
               data={patientNotes}
               keyExtractor={(item) => item.id.toString()}
@@ -190,24 +195,16 @@ export default function Notes() {
                 );
               }}
               ListEmptyComponent={
-                <Text className="text-gray-500">No notes found.</Text>
+                <Text className="text-gray-500 text-lg">No notes found.</Text>
               }
-              style={{ minHeight: 50, maxHeight: 250 }}
+              style={{ minHeight: 50 }}
             />
           </View>
         </View>
 
-        {/* hr */}
-        <View className="h-px bg-gray-300 mb-2" />
-
+        <Divider className="bg-gray-300 mb-2" />
         {/* Add note Button */}
-        <TouchableOpacity
-          className="rounded-md py-3 items-center mt-1"
-          onPress={() => setShowAddForm(true)}
-          style={{ backgroundColor: palette.primary }}
-        >
-          <Text className="text-white font-medium text-lg">Add Notes</Text>
-        </TouchableOpacity>
+        <CustomButton title="Add Notes" onPress={() => setShowAddForm(true)} />
       </View>
 
       <CustomAlertDialog
@@ -266,26 +263,43 @@ function AddNotesPage({
     setShowDatePicker(false);
   };
 
+  const isDisabled = noteTopic.trim().length === 0;
+
   const handleSave = () => {
-    if (noteTopic.trim()) {
-      handleAddUpdateNote({
-        ...(editingCondition?.id ? { id: editingCondition.id } : {}),
-        topic: noteTopic.trim(),
-        details: noteDetails.trim(),
-        reminder_date: reminderDate ?? undefined,
-      } as PatientNote);
-    }
+    if (isDisabled) return;
+    handleAddUpdateNote({
+      ...(editingCondition?.id ? { id: editingCondition.id } : {}),
+      topic: noteTopic.trim(),
+      details: noteDetails.trim(),
+      reminder_date: reminderDate ?? undefined,
+    } as PatientNote);
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <SafeAreaView className="flex-1 bg-white">
-        {/* Header */}
-        <Header title="Notes" onBackPress={onClose} />
-
-        <View className="px-6 py-8">
+    <SafeAreaView className="flex-1 bg-white">
+      {/* Header */}
+      <Header
+        title="Notes"
+        right={
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text className="text-white font-medium">Cancel</Text>
+          </TouchableOpacity>
+        }
+      />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        className="bg-white"
+        // behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={"padding"}
+        // keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+      >
+        <ScrollView
+          className="px-5 pt-5 flex-1"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Text
-            className="text-lg font-medium mb-3"
+            className="text-xl font-medium mb-3"
             style={{ color: palette.heading }}
           >
             {editingCondition ? "Update Notes" : "Add Notes"}
@@ -293,7 +307,7 @@ function AddNotesPage({
 
           {/* Enter Topic */}
           <View className="mb-4">
-            <Text className="text-gray-600 text-base mb-2">Enter Topic</Text>
+            <Text className="text-gray-600 text-base mb-2">Enter Topic *</Text>
             <TextInput
               value={noteTopic}
               onChangeText={setNoteTopic}
@@ -351,22 +365,19 @@ function AddNotesPage({
               onChangeText={setNoteDetails}
             />
           </Textarea>
-
-          {/* Save button */}
-          <TouchableOpacity
-            className="py-3 rounded-md mt-3"
-            style={{ backgroundColor: palette.primary }}
+        </ScrollView>
+        {/* Save button */}
+        <View className="px-5">
+          <CustomButton
+            title={editingCondition ? "Update" : "Save"}
             onPress={() => {
               handleSave();
               onClose(); // Go back to list
             }}
-          >
-            <Text className="text-white font-bold text-center">
-              {editingCondition ? "Update" : "Save"}
-            </Text>
-          </TouchableOpacity>
+            disabled={isDisabled}
+          />
         </View>
-      </SafeAreaView>
-    </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

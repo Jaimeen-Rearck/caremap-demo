@@ -46,7 +46,7 @@ export default function EditProfilePage() {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const showToast = useCustomToast();
   useEffect(() => {
-    logger.debug("Edit Patient: ", patient);
+    logger.debugTrunc("Edit Patient: ", patient);
     if (!patient) {
       router.replace(ROUTES.MY_HEALTH);
       return;
@@ -167,17 +167,17 @@ export default function EditProfilePage() {
             </Avatar>
           </TouchableOpacity>
           <View className="ml-16">
-            <Text className="text-lg text-white font-semibold">
+            <Text className="text-xl text-white font-semibold">
               {getDisplayName(newPatient)}
             </Text>
-            <Text className="text-white">
+            <Text className="text-white font-semibold">
               Age:{" "}
               {calculateAge(patient?.date_of_birth)
                 ? `${calculateAge(patient?.date_of_birth)} years`
                 : "Not set"}
             </Text>
 
-            <Text className="text-white">
+            <Text className="text-white font-semibold">
               Weight:{" "}
               {patient?.weight
                 ? `${patient.weight} ${newPatient.weight_unit}`
