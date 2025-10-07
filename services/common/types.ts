@@ -67,3 +67,13 @@ export interface CustomGoalParams {
   code: string;
   questions: CustomGoalQuestion[];
 }
+
+// Insights module types
+export interface InsightTopicRequest {
+  patientId: string;
+}
+
+export interface InsightTopicResponse {
+  insightName: string;
+  insightKey: string;
+}

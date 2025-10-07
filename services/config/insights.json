@@ -1,0 +1,22 @@
+[
+  {
+    "insightName": "Daily Exercise Duration",
+    "insightKey": "i_exer_rout",
+    "questionCode": "q_exer_min"
+  },
+  {
+    "insightName": "Emergency Medication",
+    "insightKey": "i_emergency_medication",
+    "questionCode": "q_emergency_med_times"
+  },
+  {
+    "insightName": "Meal Quality",
+    "insightKey": "i_meal_quality",
+    "questionCode": "q_food_issue"
+  },
+  {
+    "insightName": "Sick Visits",
+    "insightKey": "i_sick_visits",
+    "questionCode": "q_leave_times"
+  }
+]

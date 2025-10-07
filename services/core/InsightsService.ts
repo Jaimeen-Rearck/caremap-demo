@@ -1,6 +1,8 @@
 ﻿import { useModel } from '@/services/database/BaseModel';
 import { tables } from '@/services/database/migrations/v1/schema_v1';
 import { TrackResponseModel } from '@/services/database/models/TrackResponseModel';
+import { InsightTopicRequest, InsightTopicResponse } from '@/services/common/types';
+import insightsConfig from '@/services/config/insights.json';
 
 // Single shared instance of model
 const trackResponseModel = new TrackResponseModel();
@@ -80,4 +82,69 @@ export const getRescueMedicationChartData = async (
         value: day.count,
         label: new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })
     }));
+};
+
+/**
+ * Gets available insight topics for a patient based on their selected track items
+ * and questions that are suitable for insights (numeric and boolean types)
+ * @param request The request containing patient ID
+ * @returns Array of available insight topics
+ */
+export const getInsightTopics = async (
+    request: InsightTopicRequest
+): Promise<InsightTopicResponse[]> => {
+    return useModel(trackResponseModel, async (model: any) => {
+        // Get all active track items that the patient has selected
+        const selectedItems = await model.runQuery(
+            `SELECT ti.id, ti.code, ti.status 
+             FROM ${tables.TRACK_ITEM} ti 
+             INNER JOIN ${tables.TRACK_ITEM_ENTRY} tie ON ti.id = tie.track_item_id 
+             WHERE tie.patient_id = ? AND ti.status = 'active' AND tie.selected = 1`,
+            [request.patientId]
+        );
+        
+        // Get all questions of numeric or boolean type
+        const insightQuestions = await model.runQuery(
+            `SELECT q.id, q.code, q.type, q.item_id 
+             FROM ${tables.QUESTION} q 
+             WHERE q.type IN ('numeric', 'boolean')`,
+            []
+        );
+        
+        // Map of track item codes to their associated questions suitable for insights
+        const trackItemQuestionsMap = new Map();
+        
+        // Populate the map with selected track items and their insight-suitable questions
+        selectedItems.forEach((item: any) => {
+            const itemQuestions = insightQuestions.filter(
+                (q: any) => q.item_id === item.id
+            );
+            if (itemQuestions.length > 0) {
+                trackItemQuestionsMap.set(item.code, itemQuestions);
+            }
+        });
+        
+        // Filter insights from config based on available track items and questions
+        const availableInsights: InsightTopicResponse[] = [];
+        
+        insightsConfig.forEach((insight: any) => {
+            const trackItemCode = insight.insightKey;
+            const questionCode = insight.questionCode;
+            
+            // Check if this track item is selected by the patient and has the required question
+            if (trackItemQuestionsMap.has(trackItemCode)) {
+                const questions = trackItemQuestionsMap.get(trackItemCode);
+                const matchingQuestion = questions.find((q: any) => q.code === questionCode);
+                
+                if (matchingQuestion) {
+                    availableInsights.push({
+                        insightName: insight.insightName,
+                        insightKey: insight.insightKey
+                    });
+                }
+            }
+        });
+        
+        return availableInsights;
+    });
 };

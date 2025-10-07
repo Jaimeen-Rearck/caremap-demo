@@ -1,12 +1,13 @@
 ﻿import Header from "@/components/shared/Header";
 import { PatientContext } from "@/context/PatientContext";
-import { getRescueMedicationChartData } from "@/services/core/InsightsService";
+import { getRescueMedicationChartData, getInsightTopics } from "@/services/core/InsightsService";
 import palette from "@/utils/theme/color";
 import { router } from "expo-router";
 import React, { useContext, useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { LineChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { InsightTopicResponse } from "@/services/common/types";
 
 interface ChartDataPoint {
   value: number;
@@ -19,6 +20,8 @@ export default function InsightsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [insightTopics, setInsightTopics] = useState<InsightTopicResponse[]>([]);
+  const [loadingInsights, setLoadingInsights] = useState(false);
 
   const loadRescueMedicationData = async (endDate: Date) => {
     if (!patient?.id) {
@@ -141,6 +144,26 @@ export default function InsightsScreen() {
     );
   };
 
+  // Function to test getInsightTopics
+  const testGetInsightTopics = async () => {
+    if (!patient?.id) {
+      setError("No patient data available");
+      return;
+    }
+
+    try {
+      setLoadingInsights(true);
+      const topics = await getInsightTopics({ patientId: String(patient.id) });
+      setInsightTopics(topics);
+      console.log("Insight topics:", topics);
+    } catch (err) {
+      console.error("Error loading insight topics:", err);
+      setError("Failed to load insight topics");
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <Header
@@ -153,6 +176,35 @@ export default function InsightsScreen() {
       />
 
       <ScrollView className="flex-1 bg-gray-100 p-4">
+        {/* Test Button for getInsightTopics */}
+        <View className="bg-white p-4 rounded-lg mb-4">
+          <Text className="text-xl font-bold text-gray-800 mb-2">
+            Test Insights API
+          </Text>
+          <TouchableOpacity 
+            onPress={testGetInsightTopics}
+            className="bg-blue-500 py-2 px-4 rounded-lg"
+            disabled={loadingInsights}
+          >
+            <Text className="text-white text-center font-medium">
+              {loadingInsights ? "Loading..." : "Get Available Insights"}
+            </Text>
+          </TouchableOpacity>
+          
+          {/* Display Insight Topics */}
+          {insightTopics.length > 0 && (
+            <View className="mt-4">
+              <Text className="text-lg font-semibold mb-2">Available Insights:</Text>
+              {insightTopics.map((topic, index) => (
+                <View key={index} className="bg-gray-100 p-3 rounded-lg mb-2">
+                  <Text className="font-medium">{topic.insightName}</Text>
+                  <Text className="text-gray-600 text-sm">Key: {topic.insightKey}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         <Text className="text-xl font-bold text-gray-800 mb-4">
           Rescue Medication Usage
         </Text>
