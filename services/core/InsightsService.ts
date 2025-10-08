@@ -202,8 +202,11 @@ export const getAllDateBasedInsights = async (
         
         const allInsights: DateBasedInsightResponse[] = [];
         
-        // First, get all track items that were tracked on the selected date
-        // Using date format conversion to handle potential format differences
+        // First, get all available insight topics for this patient using getInsightTopics
+        const availableTopics = await getInsightTopics({ patientId });
+        logger.debug('Available insight topics', { availableTopics });
+        
+        // Then, filter to only include items tracked on the selected date
         const trackedItemsOnDate = await model.runQuery(
             `SELECT DISTINCT ti.code 
              FROM ${tables.TRACK_ITEM} ti 
@@ -217,19 +220,26 @@ export const getAllDateBasedInsights = async (
         // Create a set of tracked item codes for faster lookup
         const trackedItemCodes = new Set(trackedItemsOnDate.map((item: any) => item.code));
         
-        // Process each insight from the configuration, but only if it was tracked on the selected date
-        for (const insightConfig of insightsConfig) {
+        // Process each available insight topic, but only if it was tracked on the selected date
+        for (const topic of availableTopics) {
             try {
                 // Skip insights that weren't tracked on the selected date
-                if (!trackedItemCodes.has(insightConfig.insightKey)) {
-                    logger.debug(`Skipping insight ${insightConfig.insightName} - not tracked on ${selectedDate}`);
+                if (!trackedItemCodes.has(topic.insightKey)) {
+                    logger.debug(`Skipping insight ${topic.insightName} - not tracked on ${selectedDate}`);
+                    continue;
+                }
+                
+                // Find the corresponding insight config
+                const insightConfig = insightsConfig.find(config => config.insightKey === topic.insightKey);
+                if (!insightConfig) {
+                    logger.debug(`No config found for insight ${topic.insightName}`);
                     continue;
                 }
                 
                 const insightRequest: DateBasedInsightRequest = {
                     patientId,
                     selectedDate,
-                    insightKey: insightConfig.insightKey,
+                    insightKey: topic.insightKey,
                     questionCode: insightConfig.questionCode
                 };
                 
@@ -238,7 +248,7 @@ export const getAllDateBasedInsights = async (
                     allInsights.push(insightData);
                 }
             } catch (error) {
-                logger.debug(`Error fetching insight ${insightConfig.insightName}`, { error });
+                logger.debug(`Error fetching insight ${topic.insightName}`, { error });
                 // Continue with other insights even if one fails
             }
         }
