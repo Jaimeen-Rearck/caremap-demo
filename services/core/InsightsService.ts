@@ -9,11 +9,6 @@ import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, parse, addDay
 // Single shared instance of model
 const trackResponseModel = new TrackResponseModel();
 
-export interface DailyRescueMedicationData {
-    date: string;
-    count: number;
-}
-
 //Converts MM-DD-YYYY format to YYYY-MM-DD format
 const convertDateFormat = (dateStr: string): string => {
     if (dateStr.includes('-') && dateStr.split('-')[0].length === 2) {
@@ -26,15 +21,15 @@ const convertDateFormat = (dateStr: string): string => {
 // Helper function to get date range based on frequency
 const getDateRange = (selectedDate: string) => {
     const date = parse(selectedDate, 'yyyy-MM-dd', new Date());
-    
+
     // For daily items: get the week range (Mon-Sun)
     const weekStart = startOfWeek(date);
     const weekEnd = endOfWeek(date);
-    
+
     // For weekly items: get the month range to show all Mondays
     const monthStart = startOfMonth(date);
     const monthEnd = endOfMonth(date);
-    
+
     // For monthly items: get the quarter range
     const quarterStart = startOfQuarter(date);
     const quarterEnd = endOfQuarter(date);
@@ -58,7 +53,7 @@ const getDateRange = (selectedDate: string) => {
 // Helper function to format data points based on frequency
 const formatDataPoints = (data: any[], frequency: 'daily' | 'weekly' | 'monthly', startDate: Date) => {
     const result = [];
-    
+
     switch (frequency) {
         case 'daily':
             // Show week trend (Mon-Sun)
@@ -66,7 +61,7 @@ const formatDataPoints = (data: any[], frequency: 'daily' | 'weekly' | 'monthly'
                 const currentDate = addDays(startOfWeek(startDate), i);
                 const dateStr = format(currentDate, 'yyyy-MM-dd');
                 const dataPoint = data.find(d => d.date === dateStr);
-                
+
                 result.push({
                     label: format(currentDate, 'EEE'),
                     date: dateStr,
@@ -74,17 +69,17 @@ const formatDataPoints = (data: any[], frequency: 'daily' | 'weekly' | 'monthly'
                 });
             }
             return result;
-        
+
         case 'weekly':
             // Show all Mondays in the month
             let currentDate = startOfMonth(startDate);
             const monthEnd = endOfMonth(startDate);
-            
+
             while (currentDate <= monthEnd) {
                 if (format(currentDate, 'EEEE') === 'Monday') {
                     const dateStr = format(currentDate, 'yyyy-MM-dd');
                     const dataPoint = data.find(d => d.date === dateStr);
-                    
+
                     result.push({
                         label: format(currentDate, 'MMM d'),
                         date: dateStr,
@@ -94,7 +89,7 @@ const formatDataPoints = (data: any[], frequency: 'daily' | 'weekly' | 'monthly'
                 currentDate = addDays(currentDate, 1);
             }
             return result;
-            
+
         case 'monthly':
             // Show first day of each month in the quarter
             const quarterStart = startOfQuarter(startDate);
@@ -102,7 +97,7 @@ const formatDataPoints = (data: any[], frequency: 'daily' | 'weekly' | 'monthly'
                 const monthDate = addMonths(quarterStart, i);
                 const dateStr = format(monthDate, 'yyyy-MM-dd');
                 const dataPoint = data.find(d => d.date === dateStr);
-                
+
                 result.push({
                     label: format(monthDate, 'MMM d'),
                     date: dateStr,
@@ -113,99 +108,19 @@ const formatDataPoints = (data: any[], frequency: 'daily' | 'weekly' | 'monthly'
     }
 };
 
-export const getRescueMedicationWeekData = async (
-    patientId: number,
-    endDate: string
-): Promise<DailyRescueMedicationData[]> => {
-    return useModel(trackResponseModel, async (model: any) => {
-        // Fetch all rescue medication responses for the patient
-        const result = await model.runQuery(
-            `SELECT tie.date, tr.answer 
-             FROM ${tables.TRACK_RESPONSE} tr 
-             INNER JOIN ${tables.TRACK_ITEM_ENTRY} tie ON tr.track_item_entry_id = tie.id 
-             WHERE tr.patient_id = ? AND tr.question_id = 1 
-             ORDER BY tie.date ASC`,
-            [patientId]
-        );
-
-        // Process responses and create data map
-        const dataMap = new Map<string, number>();
-        result.forEach((row: any) => {
-            let count = 0;
-            try {
-                const answerValue = typeof row.answer === 'string' ? 
-                    JSON.parse(row.answer) : row.answer;
-                count = parseInt(answerValue) || 0;
-            } catch (e) {
-                count = parseInt(row.answer) || 0;
-            }
-            
-            const convertedDate = convertDateFormat(row.date);
-            dataMap.set(convertedDate, count);
-        });
-
-        // Generate week data (6 days before + endDate)
-        const weekData: DailyRescueMedicationData[] = [];
-        const endDateObj = new Date(endDate);
-        
-        for (let i = 6; i >= 0; i--) {
-            const date = new Date(endDateObj);
-            date.setDate(endDateObj.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-            
-            weekData.push({
-                date: dateStr,
-                count: dataMap.get(dateStr) || 0
-            });
-        }
-
-        return weekData;
-    });
-};
-
-//Gets chart-ready data for rescue medication usage
-export const getRescueMedicationChartData = async (
-    patientId: number,
-    endDate: string
-): Promise<{ value: number; label: string }[]> => {
-    const weekData = await getRescueMedicationWeekData(patientId, endDate);
-    
-    return weekData.map((day) => ({
-        value: day.count,
-        label: new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })
-    }));
-};
-
-/**
- * Gets available insight topics for a patient based on their selected track items
- * and questions that are suitable for insights (numeric and boolean types)
- * @param request The request containing patient ID
- * @returns Array of available insight topics
- */
-/**
- * Gets insights data for a specific date, including daily, weekly, and monthly trends if applicable
- * @param request The request containing patient ID, selected date, insight key, and question code
- * @returns Insights data with different frequency trends
- */
-/**
- * Gets all insights data for a selected date
- * @param patientId The patient ID
- * @param selectedDate The selected date in YYYY-MM-DD format
- * @returns Array of insights data for all available track items
- */
 export const getAllDateBasedInsights = async (
     patientId: string,
     selectedDate: string
 ): Promise<DateBasedInsightResponse[]> => {
     return useModel(trackResponseModel, async (model: any) => {
         logger.debug('getAllDateBasedInsights called', { patientId, selectedDate });
-        
+
         const allInsights: DateBasedInsightResponse[] = [];
-        
+
         // First, get all available insight topics for this patient using getInsightTopics
         const availableTopics = await getInsightTopics({ patientId });
         logger.debug('Available insight topics', { availableTopics });
-        
+
         // Then, filter to only include items tracked on the selected date
         const trackedItemsOnDate = await model.runQuery(
             `SELECT DISTINCT ti.code 
@@ -214,12 +129,12 @@ export const getAllDateBasedInsights = async (
              WHERE tie.patient_id = ? AND (tie.date = ? OR tie.date LIKE ?) AND tie.selected = 1`,
             [patientId, selectedDate, `%${selectedDate.split('-')[1]}-${selectedDate.split('-')[2]}-${selectedDate.split('-')[0]}`]
         );
-        
+
         logger.debug('Tracked items on selected date', { trackedItemsOnDate });
-        
+
         // Create a set of tracked item codes for faster lookup
         const trackedItemCodes = new Set(trackedItemsOnDate.map((item: any) => item.code));
-        
+
         // Process each available insight topic, but only if it was tracked on the selected date
         for (const topic of availableTopics) {
             try {
@@ -228,21 +143,21 @@ export const getAllDateBasedInsights = async (
                     logger.debug(`Skipping insight ${topic.insightName} - not tracked on ${selectedDate}`);
                     continue;
                 }
-                
+
                 // Find the corresponding insight config
                 const insightConfig = insightsConfig.find(config => config.insightKey === topic.insightKey);
                 if (!insightConfig) {
                     logger.debug(`No config found for insight ${topic.insightName}`);
                     continue;
                 }
-                
+
                 const insightRequest: DateBasedInsightRequest = {
                     patientId,
                     selectedDate,
                     insightKey: topic.insightKey,
                     questionCode: insightConfig.questionCode
                 };
-                
+
                 const insightData = await getDateBasedInsights(insightRequest);
                 if (insightData && insightData.series && insightData.series.length > 0) {
                     allInsights.push(insightData);
@@ -252,7 +167,7 @@ export const getAllDateBasedInsights = async (
                 // Continue with other insights even if one fails
             }
         }
-        
+
         return allInsights;
     });
 };
@@ -314,17 +229,17 @@ export const getDateBasedInsights = async (
         const processedData = allData.map((row: any) => {
             let value = 0;
             try {
-                const answerValue = typeof row.answer === 'string' ? 
+                const answerValue = typeof row.answer === 'string' ?
                     JSON.parse(row.answer) : row.answer;
-                value = questionType === 'boolean' ? 
-                    (answerValue ? 1 : 0) : 
+                value = questionType === 'boolean' ?
+                    (answerValue ? 1 : 0) :
                     (parseInt(answerValue) || 0);
             } catch (e) {
-                value = questionType === 'boolean' ? 
-                    (row.answer ? 1 : 0) : 
+                value = questionType === 'boolean' ?
+                    (row.answer ? 1 : 0) :
                     (parseInt(row.answer) || 0);
             }
-            
+
             return {
                 date: convertDateFormat(row.date),
                 value
@@ -385,10 +300,10 @@ export const getDateBasedInsights = async (
             });
         }
 
-        logger.debug('getDateBasedInsights response', { 
+        logger.debug('getDateBasedInsights response', {
             startDate: dateRanges.monthly.start,
             endDate: dateRanges.monthly.end,
-            series 
+            series
         });
 
         return {
@@ -411,7 +326,7 @@ export const getInsightTopics = async (
              WHERE tie.patient_id = ? AND ti.status = 'active' AND tie.selected = 1`,
             [request.patientId]
         );
-        
+
         // Get all questions of numeric or boolean type
         const insightQuestions = await model.runQuery(
             `SELECT q.id, q.code, q.type, q.item_id 
@@ -419,10 +334,10 @@ export const getInsightTopics = async (
              WHERE q.type IN ('numeric', 'boolean')`,
             []
         );
-        
+
         // Map of track item codes to their associated questions suitable for insights
         const trackItemQuestionsMap = new Map();
-        
+
         // Populate the map with selected track items and their insight-suitable questions
         selectedItems.forEach((item: any) => {
             const itemQuestions = insightQuestions.filter(
@@ -432,19 +347,19 @@ export const getInsightTopics = async (
                 trackItemQuestionsMap.set(item.code, itemQuestions);
             }
         });
-        
+
         // Filter insights from config based on available track items and questions
         const availableInsights: InsightTopicResponse[] = [];
-        
+
         insightsConfig.forEach((insight: any) => {
             const trackItemCode = insight.insightKey;
             const questionCode = insight.questionCode;
-            
+
             // Check if this track item is selected by the patient and has the required question
             if (trackItemQuestionsMap.has(trackItemCode)) {
                 const questions = trackItemQuestionsMap.get(trackItemCode);
                 const matchingQuestion = questions.find((q: any) => q.code === questionCode);
-                
+
                 if (matchingQuestion) {
                     availableInsights.push({
                         insightName: insight.insightName,
@@ -453,7 +368,7 @@ export const getInsightTopics = async (
                 }
             }
         });
-        
+
         return availableInsights;
     });
 };

@@ -4,31 +4,27 @@
     "insightKey": "i_exer_rout",
     "questionCode": "q_exer_min",
     "frequencies": ["daily"],
-    "transform": "numeric",
-    "unit": "minutes"
+    "transform": "numeric"
   },
   {
     "insightName": "Emergency Medication",
     "insightKey": "i_emergency_medication",
     "questionCode": "q_emergency_med_times",
     "frequencies": ["weekly"],
-    "transform": "numeric",
-    "unit": "times"
+    "transform": "numeric"
   },
   {
     "insightName": "Meal Quality",
     "insightKey": "i_meal_quality",
     "questionCode": "q_food_issue",
     "frequencies": ["daily"],
-    "transform": "boolean",
-    "unit": "issues"
+    "transform": "boolean"
   },
   {
     "insightName": "Sick Visits",
     "insightKey": "i_sick_visits",
     "questionCode": "q_leave_times",
     "frequencies": ["monthly"],
-    "transform": "numeric",
-    "unit": "visits"
+    "transform": "numeric"
   }
 ]
