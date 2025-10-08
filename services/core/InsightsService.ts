@@ -1,8 +1,10 @@
-﻿import { useModel } from '@/services/database/BaseModel';
+import { useModel } from '@/services/database/BaseModel';
 import { tables } from '@/services/database/migrations/v1/schema_v1';
 import { TrackResponseModel } from '@/services/database/models/TrackResponseModel';
-import { InsightTopicRequest, InsightTopicResponse } from '@/services/common/types';
+import { DateBasedInsightRequest, DateBasedInsightResponse, InsightTopicRequest, InsightTopicResponse } from '@/services/common/types';
 import insightsConfig from '@/services/config/insights.json';
+import { logger } from '@/services/logging/logger';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, parse, addDays, startOfQuarter, endOfQuarter, addMonths } from 'date-fns';
 
 // Single shared instance of model
 const trackResponseModel = new TrackResponseModel();
@@ -19,6 +21,96 @@ const convertDateFormat = (dateStr: string): string => {
         return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
     return dateStr;
+};
+
+// Helper function to get date range based on frequency
+const getDateRange = (selectedDate: string) => {
+    const date = parse(selectedDate, 'yyyy-MM-dd', new Date());
+    
+    // For daily items: get the week range (Mon-Sun)
+    const weekStart = startOfWeek(date);
+    const weekEnd = endOfWeek(date);
+    
+    // For weekly items: get the month range to show all Mondays
+    const monthStart = startOfMonth(date);
+    const monthEnd = endOfMonth(date);
+    
+    // For monthly items: get the quarter range
+    const quarterStart = startOfQuarter(date);
+    const quarterEnd = endOfQuarter(date);
+
+    return {
+        daily: {
+            start: format(weekStart, 'yyyy-MM-dd'),
+            end: format(weekEnd, 'yyyy-MM-dd')
+        },
+        weekly: {
+            start: format(monthStart, 'yyyy-MM-dd'),
+            end: format(monthEnd, 'yyyy-MM-dd')
+        },
+        monthly: {
+            start: format(quarterStart, 'yyyy-MM-dd'),
+            end: format(quarterEnd, 'yyyy-MM-dd')
+        }
+    };
+};
+
+// Helper function to format data points based on frequency
+const formatDataPoints = (data: any[], frequency: 'daily' | 'weekly' | 'monthly', startDate: Date) => {
+    const result = [];
+    
+    switch (frequency) {
+        case 'daily':
+            // Show week trend (Mon-Sun)
+            for (let i = 0; i < 7; i++) {
+                const currentDate = addDays(startOfWeek(startDate), i);
+                const dateStr = format(currentDate, 'yyyy-MM-dd');
+                const dataPoint = data.find(d => d.date === dateStr);
+                
+                result.push({
+                    label: format(currentDate, 'EEE'),
+                    date: dateStr,
+                    value: dataPoint ? dataPoint.value : 0
+                });
+            }
+            return result;
+        
+        case 'weekly':
+            // Show all Mondays in the month
+            let currentDate = startOfMonth(startDate);
+            const monthEnd = endOfMonth(startDate);
+            
+            while (currentDate <= monthEnd) {
+                if (format(currentDate, 'EEEE') === 'Monday') {
+                    const dateStr = format(currentDate, 'yyyy-MM-dd');
+                    const dataPoint = data.find(d => d.date === dateStr);
+                    
+                    result.push({
+                        label: format(currentDate, 'MMM d'),
+                        date: dateStr,
+                        value: dataPoint ? dataPoint.value : 0
+                    });
+                }
+                currentDate = addDays(currentDate, 1);
+            }
+            return result;
+            
+        case 'monthly':
+            // Show first day of each month in the quarter
+            const quarterStart = startOfQuarter(startDate);
+            for (let i = 0; i < 3; i++) {
+                const monthDate = addMonths(quarterStart, i);
+                const dateStr = format(monthDate, 'yyyy-MM-dd');
+                const dataPoint = data.find(d => d.date === dateStr);
+                
+                result.push({
+                    label: format(monthDate, 'MMM d'),
+                    date: dateStr,
+                    value: dataPoint ? dataPoint.value : 0
+                });
+            }
+            return result;
+    }
 };
 
 export const getRescueMedicationWeekData = async (
@@ -90,6 +182,153 @@ export const getRescueMedicationChartData = async (
  * @param request The request containing patient ID
  * @returns Array of available insight topics
  */
+/**
+ * Gets insights data for a specific date, including daily, weekly, and monthly trends if applicable
+ * @param request The request containing patient ID, selected date, insight key, and question code
+ * @returns Insights data with different frequency trends
+ */
+export const getDateBasedInsights = async (
+    request: DateBasedInsightRequest
+): Promise<DateBasedInsightResponse> => {
+    return useModel(trackResponseModel, async (model: any) => {
+        logger.debug('getDateBasedInsights called', { request });
+
+        // Get the question ID and insight configuration
+        const question = await model.runQuery(
+            `SELECT q.id, q.type, ti.id as topic_id, ti.name as topic_name
+             FROM ${tables.QUESTION} q 
+             INNER JOIN ${tables.TRACK_ITEM} ti ON q.item_id = ti.id
+             WHERE q.code = ? AND ti.code = ?`,
+            [request.questionCode, request.insightKey]
+        );
+
+        logger.debug('Question query result', { question });
+
+        if (!question || question.length === 0) {
+            throw new Error('Question not found for the given insight');
+        }
+
+        const questionId = question[0].id;
+        const questionType = question[0].type;
+        const topicId = question[0].topic_id;
+        const topicName = question[0].topic_name;
+
+        // Get date ranges for different frequencies
+        const dateRanges = getDateRange(request.selectedDate);
+        logger.debug('Date ranges calculated', { dateRanges });
+
+        // Get the insight configuration
+        const insightConfig = insightsConfig.find(
+            config => config.insightKey === request.insightKey
+        );
+
+        if (!insightConfig) {
+            throw new Error('Insight configuration not found');
+        }
+
+        // Fetch data for the longest range (quarterly for monthly items)
+        const allData = await model.runQuery(
+            `SELECT tie.date, tr.answer 
+             FROM ${tables.TRACK_RESPONSE} tr 
+             INNER JOIN ${tables.TRACK_ITEM_ENTRY} tie ON tr.track_item_entry_id = tie.id 
+             WHERE tr.patient_id = ? 
+             AND tr.question_id = ? 
+             ORDER BY tie.date DESC
+             LIMIT 30`,
+            [request.patientId, questionId]
+        );
+
+        logger.debug('Raw data fetched', { allData });
+
+        // Process the raw data
+        const processedData = allData.map((row: any) => {
+            let value = 0;
+            try {
+                const answerValue = typeof row.answer === 'string' ? 
+                    JSON.parse(row.answer) : row.answer;
+                value = questionType === 'boolean' ? 
+                    (answerValue ? 1 : 0) : 
+                    (parseInt(answerValue) || 0);
+            } catch (e) {
+                value = questionType === 'boolean' ? 
+                    (row.answer ? 1 : 0) : 
+                    (parseInt(row.answer) || 0);
+            }
+            
+            return {
+                date: convertDateFormat(row.date),
+                value
+            };
+        });
+
+        logger.debug('Processed data', { processedData });
+
+        // Construct the response based on tracking frequency
+        const series = [];
+        const selectedDate = parse(request.selectedDate, 'yyyy-MM-dd', new Date());
+
+        // For daily tracking items, show weekly trend
+        if (insightConfig.frequencies.includes('daily')) {
+            const weeklyTrend = formatDataPoints(
+                processedData,
+                'daily',
+                selectedDate
+            );
+            series.push({
+                questionId,
+                transform: questionType,
+                topicId,
+                topic: `${topicName} (Weekly Trend)`,
+                data: weeklyTrend
+            });
+        }
+
+        // For weekly tracking items, show monthly trend (Mondays)
+        if (insightConfig.frequencies.includes('weekly')) {
+            const monthlyTrend = formatDataPoints(
+                processedData,
+                'weekly',
+                selectedDate
+            );
+            series.push({
+                questionId,
+                transform: questionType,
+                topicId,
+                topic: `${topicName} (Monthly Trend)`,
+                data: monthlyTrend
+            });
+        }
+
+        // For monthly tracking items, show quarterly trend
+        if (insightConfig.frequencies.includes('monthly')) {
+            const quarterlyTrend = formatDataPoints(
+                processedData,
+                'monthly',
+                selectedDate
+            );
+            series.push({
+                questionId,
+                transform: questionType,
+                topicId,
+                topic: `${topicName} (Quarterly Trend)`,
+                data: quarterlyTrend
+            });
+        }
+
+        logger.debug('getDateBasedInsights response', { 
+            startDate: dateRanges.monthly.start,
+            endDate: dateRanges.monthly.end,
+            series 
+        });
+
+        return {
+            startDate: dateRanges.monthly.start,
+            endDate: dateRanges.monthly.end,
+            series
+        };
+    });
+};
+
 export const getInsightTopics = async (
     request: InsightTopicRequest
 ): Promise<InsightTopicResponse[]> => {

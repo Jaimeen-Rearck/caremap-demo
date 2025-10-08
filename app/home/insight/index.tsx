@@ -1,4 +1,4 @@
-﻿import Header from "@/components/shared/Header";
+import Header from "@/components/shared/Header";
 import { PatientContext } from "@/context/PatientContext";
 import { getRescueMedicationChartData, getInsightTopics } from "@/services/core/InsightsService";
 import palette from "@/utils/theme/color";
@@ -176,8 +176,23 @@ export default function InsightsScreen() {
       />
 
       <ScrollView className="flex-1 bg-gray-100 p-4">
-        {/* Test Button for getInsightTopics */}
-        <View className="bg-white p-4 rounded-lg mb-4">
+          {/* Date-based Insights Button */}
+          <View className="bg-white p-4 rounded-lg mb-4">
+            <Text className="text-xl font-bold text-gray-800 mb-2">
+              Date-based Insights Test
+            </Text>
+            <TouchableOpacity 
+              onPress={() => router.push("/home/insight/DateBasedInsightScreen" as any)}
+              className="bg-blue-500 py-2 px-4 rounded-lg"
+            >
+              <Text className="text-white text-center font-medium">
+                Test Date-based Insights
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Test Button for getInsightTopics */}
+          <View className="bg-white p-4 rounded-lg mb-4">
           <Text className="text-xl font-bold text-gray-800 mb-2">
             Test Insights API
           </Text>
