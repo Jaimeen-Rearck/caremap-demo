@@ -187,6 +187,66 @@ export const getRescueMedicationChartData = async (
  * @param request The request containing patient ID, selected date, insight key, and question code
  * @returns Insights data with different frequency trends
  */
+/**
+ * Gets all insights data for a selected date
+ * @param patientId The patient ID
+ * @param selectedDate The selected date in YYYY-MM-DD format
+ * @returns Array of insights data for all available track items
+ */
+export const getAllDateBasedInsights = async (
+    patientId: string,
+    selectedDate: string
+): Promise<DateBasedInsightResponse[]> => {
+    return useModel(trackResponseModel, async (model: any) => {
+        logger.debug('getAllDateBasedInsights called', { patientId, selectedDate });
+        
+        const allInsights: DateBasedInsightResponse[] = [];
+        
+        // First, get all track items that were tracked on the selected date
+        // Using date format conversion to handle potential format differences
+        const trackedItemsOnDate = await model.runQuery(
+            `SELECT DISTINCT ti.code 
+             FROM ${tables.TRACK_ITEM} ti 
+             INNER JOIN ${tables.TRACK_ITEM_ENTRY} tie ON ti.id = tie.track_item_id 
+             WHERE tie.patient_id = ? AND (tie.date = ? OR tie.date LIKE ?) AND tie.selected = 1`,
+            [patientId, selectedDate, `%${selectedDate.split('-')[1]}-${selectedDate.split('-')[2]}-${selectedDate.split('-')[0]}`]
+        );
+        
+        logger.debug('Tracked items on selected date', { trackedItemsOnDate });
+        
+        // Create a set of tracked item codes for faster lookup
+        const trackedItemCodes = new Set(trackedItemsOnDate.map((item: any) => item.code));
+        
+        // Process each insight from the configuration, but only if it was tracked on the selected date
+        for (const insightConfig of insightsConfig) {
+            try {
+                // Skip insights that weren't tracked on the selected date
+                if (!trackedItemCodes.has(insightConfig.insightKey)) {
+                    logger.debug(`Skipping insight ${insightConfig.insightName} - not tracked on ${selectedDate}`);
+                    continue;
+                }
+                
+                const insightRequest: DateBasedInsightRequest = {
+                    patientId,
+                    selectedDate,
+                    insightKey: insightConfig.insightKey,
+                    questionCode: insightConfig.questionCode
+                };
+                
+                const insightData = await getDateBasedInsights(insightRequest);
+                if (insightData && insightData.series && insightData.series.length > 0) {
+                    allInsights.push(insightData);
+                }
+            } catch (error) {
+                logger.debug(`Error fetching insight ${insightConfig.insightName}`, { error });
+                // Continue with other insights even if one fails
+            }
+        }
+        
+        return allInsights;
+    });
+};
+
 export const getDateBasedInsights = async (
     request: DateBasedInsightRequest
 ): Promise<DateBasedInsightResponse> => {
