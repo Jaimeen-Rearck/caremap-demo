@@ -451,7 +451,9 @@ export const removeTrackItemFromDate = async (
     logger.debug('unlinkItemFromPatientDate called', { itemId, patientId, date });
 
     await useModel(trackItemEntryModel, async (model: any) => {
+        // 1. Mark all entries as deselected for this item and patient
         await model.updateByFields({ selected: 0, updated_date: now }, { patient_id: patientId, track_item_id: itemId });
+
     });
 
     logger.debug('unlinkItemFromPatientDate completed (deselected all future entries and past entries without responses)', { itemId, patientId });
