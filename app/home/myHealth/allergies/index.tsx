@@ -1,33 +1,29 @@
-import React, { useContext, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Textarea, TextareaInput } from "@/components/ui/textarea";
-import palette from "@/utils/theme/color";
-import {
-  createPatientAllergy,
-  getPatientAllergiesByPatientId,
-  updatePatientAllergy,
-  deletePatientAllergy,
-} from "@/services/core/PatientAllergyService";
-import { PatientContext } from "@/context/PatientContext";
+import ActionPopover from "@/components/shared/ActionPopover";
 import { CustomAlertDialog } from "@/components/shared/CustomAlertDialog";
 import Header from "@/components/shared/Header";
-import ActionPopover from "@/components/shared/ActionPopover";
 import { useCustomToast } from "@/components/shared/useCustomToast";
+import { Textarea, TextareaInput } from "@/components/ui/textarea";
+import { PatientContext } from "@/context/PatientContext";
+import {
+  createPatientAllergy,
+  deletePatientAllergy,
+  getPatientAllergiesByPatientId,
+  updatePatientAllergy,
+} from "@/services/core/PatientAllergyService";
 import { PatientAllergy } from "@/services/database/migrations/v1/schema_v1";
 import { logger } from "@/services/logging/logger";
-import { router } from "expo-router";
-import { Divider } from "@/components/ui/divider";
-import { CustomButton } from "@/components/shared/CustomButton";
+import palette from "@/utils/theme/color";
+import React, { useContext, useEffect, useState } from "react";
+import {
+  FlatList,
+  Keyboard,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Allergies() {
   const { patient } = useContext(PatientContext);
@@ -55,7 +51,7 @@ export default function Allergies() {
       const allergies = await getPatientAllergiesByPatientId(patient.id);
       setPatientAllergy(allergies);
     } catch (e) {
-      logger.debug(String(e));
+      logger.debug(`${e}`);
     }
   }
 
@@ -138,41 +134,34 @@ export default function Allergies() {
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
-      <Header
-        title="Allergies"
-        right={
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-white font-medium">Cancel</Text>
-          </TouchableOpacity>
-        }
-      />
+      <Header title="Allergies" />
 
-      <View className="px-5 pt-5 flex-1">
+      <View className="px-6 pt-8 flex-1">
         <View>
           <Text
-            className="text-xl font-semibold"
+            className="text-lg font-semibold"
             style={{ color: palette.heading }}
           >
-            Allergies (Linked Health System)
+            Allergies (linked Health System)
           </Text>
-          <Text className="text-gray-500 text-lg">
+          <Text className="text-gray-500">
             Select ones to review with your care team
           </Text>
           {/* hr */}
-          <Divider className="bg-gray-300 my-3" />
+          <View className="h-px bg-gray-300 my-3" />
         </View>
 
-        <View className="flex-1">
+        <View>
           <Text
-            className="text-xl font-semibold"
+            className="text-lg font-semibold"
             style={{ color: palette.heading }}
           >
             List your Allergies
           </Text>
 
-          <Divider className="bg-gray-300 my-3" />
-
-          <View className="flex-1">
+          {/* hr */}
+          <View className="h-px bg-gray-300 my-3" />
+          <View>
             <FlatList
               data={patientAllergy}
               keyExtractor={(item) => item.id.toString()}
@@ -184,12 +173,12 @@ export default function Allergies() {
                   <View className="border border-gray-300 rounded-lg mb-3 px-3 py-3">
                     <View className="flex-row items-center justify-between">
                       <View className="flex-row items-center space-x-2">
-                        <Text className="text-lg ml-3 max-w-[220px] text-left font-medium">
+                        <Text className="text-lg ml-3 max-w-[220px] text-left">
                           {item.topic}
                         </Text>
                       </View>
                       <View className="flex-row">
-                        <Text className="text-lg text-gray-700 mr-3">
+                        <Text className="text-lg text-gray-500 mr-3">
                           {formattedDate}
                         </Text>
 
@@ -206,13 +195,13 @@ export default function Allergies() {
                     </View>
                     {item.details ? (
                       <View className="px-3 mt-1">
-                        <Text className="text-lg text-gray-700">
+                        <Text className="text-base text-gray-700">
                           {item.details}
                         </Text>
                       </View>
                     ) : null}
                     {item.severity ? (
-                      <View className="px-3">
+                      <View className="px-3 mt-1">
                         <Text className="text-base text-gray-700">
                           Severity: {item.severity}
                         </Text>
@@ -224,27 +213,22 @@ export default function Allergies() {
               ListEmptyComponent={
                 <Text className="text-gray-500">No Allergies found.</Text>
               }
-              style={{ minHeight: 50 }}
+              style={{ minHeight: 50, maxHeight: 300 }}
             />
           </View>
         </View>
 
         {/* hr */}
-        <Divider className="bg-gray-300 mb-2" />
+        <View className="h-px bg-gray-300 mb-2" />
 
         {/* Add Button */}
-        {/* <TouchableOpacity
+        <TouchableOpacity
           className="rounded-md py-3 items-center mt-1"
           onPress={() => setShowAddForm(true)}
           style={{ backgroundColor: palette.primary }}
         >
           <Text className="text-white font-medium text-lg">Add Allergy</Text>
-        </TouchableOpacity> */}
-
-        <CustomButton
-          title="Add Allergy"
-          onPress={() => setShowAddForm(true)}
-        />
+        </TouchableOpacity>
       </View>
 
       <CustomAlertDialog
@@ -284,45 +268,26 @@ function AddAllergyPage({
     editingCondition?.severity || ""
   );
 
-  const isDisabled = topic.trim().length === 0;
-
   const handleSave = () => {
-    if (isDisabled) return;
-    handleAddUpdateAllergy({
-      ...(editingCondition?.id ? { id: editingCondition.id } : {}),
-      topic: topic.trim(),
-      details: details.trim(),
-      ...(severity ? { severity } : {}),
-    } as PatientAllergy);
-    onClose(); // Go back to list
+    if (topic.trim()) {
+      handleAddUpdateAllergy({
+        ...(editingCondition?.id ? { id: editingCondition.id } : {}),
+        topic: topic.trim(),
+        details: details.trim(),
+        ...(severity ? { severity } : {}),
+      } as PatientAllergy);
+    }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      {/* Header */}
-      <Header
-        title="Allergies"
-        right={
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-white font-medium">Cancel</Text>
-          </TouchableOpacity>
-        }
-        onBackPress={onClose}
-      />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        className="bg-white"
-        behavior={"padding"}
-        // behavior={Platform.OS === "ios" ? "padding" : "height"}
-        // keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-      >
-        <ScrollView
-          className="px-5 pt-5 flex-1"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView className="flex-1 bg-white">
+        {/* Header */}
+        <Header title="Allergies" onBackPress={onClose} />
+
+        <View className="px-6 py-8">
           <Text
-            className="text-xl font-medium mb-3"
+            className="text-lg font-medium mb-3"
             style={{ color: palette.heading }}
           >
             {editingCondition ? "Update Allergy" : " Add Allergy"}
@@ -330,7 +295,7 @@ function AddAllergyPage({
 
           {/* Enter Topic */}
           <View className="mb-4">
-            <Text className="text-gray-600 text-base mb-2">Enter Topic *</Text>
+            <Text className="text-gray-600 text-sm mb-2">Enter Topic</Text>
             <TextInput
               value={topic}
               onChangeText={setTopic}
@@ -343,7 +308,7 @@ function AddAllergyPage({
           </View>
 
           {/* Details */}
-          <Text className="text-gray-500 mb-2 text-base">Details</Text>
+          <Text className="text-gray-500 mb-2 text-sm">Details</Text>
           <Textarea
             size="md"
             isReadOnly={false}
@@ -360,7 +325,7 @@ function AddAllergyPage({
           </Textarea>
 
           {/* Severity */}
-          <Text className="text-gray-600 text-base mb-2 mt-4">Severity</Text>
+          <Text className="text-gray-600 text-sm mb-2 mt-4">Severity</Text>
           <View style={{ width: "70%", alignSelf: "flex-start" }}>
             <View
               className="flex-row border rounded-lg overflow-hidden mb-2"
@@ -395,17 +360,22 @@ function AddAllergyPage({
               ))}
             </View>
           </View>
-        </ScrollView>
 
-        {/* Save button */}
-        <View className="px-5">
-          <CustomButton
-            title={editingCondition ? "Update" : "Save"}
-            onPress={handleSave}
-            disabled={isDisabled}
-          />
+          {/* Save button */}
+          <TouchableOpacity
+            className="py-3 rounded-md mt-3"
+            style={{ backgroundColor: palette.primary }}
+            onPress={() => {
+              handleSave();
+              onClose(); // Go back to list
+            }}
+          >
+            <Text className="text-white font-bold text-center">
+              {editingCondition ? "Update" : "Save"}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
