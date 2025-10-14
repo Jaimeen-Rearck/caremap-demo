@@ -109,9 +109,9 @@ export default function CareTeamListScreen() {
               })
             }
           >
-              <Text className="text-white font-medium whitespace-nowrap">
-                            Add contact
-                          </Text>
+            <Text className="text-base font-semibold text-white">
+              Add Contact
+            </Text>
           </TouchableOpacity>
         }
       />

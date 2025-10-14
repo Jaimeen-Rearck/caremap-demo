@@ -4,12 +4,12 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  SafeAreaView,
+  Keyboard,
+  TouchableWithoutFeedback,
   FlatList,
-  ScrollView,
-  KeyboardAvoidingView,
 } from "react-native";
 import { CalendarDaysIcon, Icon } from "@/components/ui/icon";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ChevronLeft } from "lucide-react-native";
 import palette from "@/utils/theme/color";
@@ -27,8 +27,6 @@ import {
   getHospitalizationsByPatientId,
   updateHospitalization,
 } from "@/services/core/HospitalizationService";
-import { router } from "expo-router";
-import { CustomButton } from "@/components/shared/CustomButton";
 
 export default function Hospitalization() {
   const { patient } = useContext(PatientContext);
@@ -132,17 +130,10 @@ export default function Hospitalization() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <Header
-        title="Hospitalizations"
-        right={
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-white font-medium">Cancel</Text>
-          </TouchableOpacity>
-        }
-      />
-      <View className="px-5 pt-5 bg-white flex-1">
+      <Header title="Hospitalizations" />
+      <View className="p-4 bg-white flex-1">
         <Text
-          className="text-xl font-semibold mb-2"
+          className="text-lg font-semibold mb-2"
           style={{ color: palette.heading }}
         >
           List your active hospitalizations
@@ -193,11 +184,17 @@ export default function Hospitalization() {
           }
         />
 
-        <Divider className="bg-gray-300 mb-2" />
-        <CustomButton
-          title="Add Hospitalizations Details"
+        <Divider className="bg-gray-300" />
+
+        <TouchableOpacity
+          className="py-3 rounded-lg mt-2"
+          style={{ backgroundColor: palette.primary }}
           onPress={() => setShowForm(true)}
-        />
+        >
+          <Text className="text-white font-bold text-center">
+            Add Hospitalizations Details
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <CustomAlertDialog
@@ -212,6 +209,12 @@ export default function Hospitalization() {
             ? `Are you sure you want to delete the hospitalization record?`
             : "Are you sure you want to delete this item?"
         }
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonProps={{
+          style: { backgroundColor: palette.primary, marginLeft: 8 },
+        }}
+        cancelButtonProps={{ variant: "outline" }}
         onConfirm={async () => {
           if (itemToDelete) {
             await deleteHospitalization(itemToDelete.id);
@@ -278,40 +281,32 @@ function HospitalizationForm({
   const isDisabled = !admission || !discharge || !description.trim();
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <Header
-        title="Hospitalizations"
-        right={
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-white font-medium">Cancel</Text>
-          </TouchableOpacity>
-        }
-        onBackPress={onClose}
-      />
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        className="bg-white"
-        // behavior={Platform.OS === "ios" ? "padding" : "height"}
-        behavior={"padding"}
-        // keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-      >
-        <ScrollView
-          className="px-5 pt-5 flex-1"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView className="flex-1 bg-white">
+        <View
+          className="py-3 flex-row items-center"
+          style={{ backgroundColor: palette.primary }}
         >
+          <TouchableOpacity onPress={onClose} className="p-2 ml-2">
+            <ChevronLeft color="white" size={24} />
+          </TouchableOpacity>
+          <Text className="text-xl text-white font-bold ml-4">
+            {editingItem ? "Edit" : "Add"} Hospitalization
+          </Text>
+        </View>
+
+        <View className="px-6 py-8">
           <Text
-            className="text-xl font-medium mb-3"
+            className="text-lg font-medium mb-3"
             style={{ color: palette.heading }}
           >
             {editingItem
-              ? "Update Hospitalization"
+              ? "Edit Hospitalization"
               : "Enter details of recent hospitalizations"}
           </Text>
 
           <View className="mb-4">
-            <Text className="text-base mb-1 text-gray-600">
+            <Text className="text-sm mb-1 text-gray-600">
               Date of Admission
             </Text>
             <TouchableOpacity
@@ -335,7 +330,7 @@ function HospitalizationForm({
           </View>
 
           <View className="mb-4">
-            <Text className="text-base mb-1 text-gray-600">
+            <Text className="text-sm mb-1 text-gray-600">
               Date of Discharge
             </Text>
             <TouchableOpacity
@@ -369,7 +364,7 @@ function HospitalizationForm({
             }
           />
 
-          <Text className="text-base mb-1 text-gray-600 mt-2">Description</Text>
+          <Text className="text-sm mb-1 text-gray-600 mt-2">Description</Text>
           <TextInput
             className="border border-gray-300 rounded-lg p-3 mb-4"
             placeholder="Enter description"
@@ -379,11 +374,11 @@ function HospitalizationForm({
             numberOfLines={4}
             textAlignVertical="top"
           />
-        </ScrollView>
-        <View className="px-5">
-          <CustomButton
-            title={editingItem ? "Update" : "Add"}
+
+          <TouchableOpacity
+            className={`py-3 rounded-lg ${isDisabled ? "opacity-50" : ""}`}
             disabled={isDisabled}
+            style={{ backgroundColor: palette.primary }}
             onPress={() => {
               if (!isDisabled && admission && discharge) {
                 if (discharge < admission) {
@@ -403,9 +398,11 @@ function HospitalizationForm({
                 });
               }
             }}
-          />
+          >
+            <Text className="text-white font-bold text-center">Save</Text>
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }

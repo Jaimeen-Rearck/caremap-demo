@@ -35,18 +35,6 @@ import {
 import { Contact } from "@/services/database/migrations/v1/schema_v1";
 import { useCustomToast } from "@/components/shared/useCustomToast";
 import { Textarea, TextareaInput } from "@/components/ui/textarea";
-import {
-  FormControl,
-  FormControlLabel,
-  FormControlLabelText,
-  FormControlHelper,
-  FormControlHelperText,
-  FormControlError,
-  FormControlErrorText,
-  FormControlErrorIcon,
-} from "@/components/ui/form-control";
-import { Input, InputField } from "@/components/ui/input";
-import { AlertCircleIcon } from "@/components/ui/icon";
 import { CustomButton } from "@/components/shared/CustomButton";
 
 type Params = {
