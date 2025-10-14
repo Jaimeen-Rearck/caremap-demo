@@ -507,7 +507,7 @@ export const getSummariesForItem = async (entryId: number): Promise<string[]> =>
       LEFT JOIN ${tables.TRACK_RESPONSE} r
         ON q.id = r.question_id AND r.track_item_entry_id = ?
       WHERE q.item_id = (SELECT item_id FROM ${tables.TRACK_ITEM_ENTRY} WHERE id = ?)
-      ORDER BY r.updated_date DESC
+        AND r.answer IS NOT NULL
       `,
             [entryId, entryId]
         );
