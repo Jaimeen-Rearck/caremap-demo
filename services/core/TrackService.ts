@@ -13,8 +13,6 @@ import { TrackItemEntryModel } from '@/services/database/models/TrackItemEntryMo
 import { TrackItemModel } from '@/services/database/models/TrackItemModel';
 import { TrackResponseModel } from '@/services/database/models/TrackResponseModel';
 import { logger } from '@/services/logging/logger';
-import 'react-native-get-random-values';
-import { v4 as uuidv4 } from 'uuid';
 
 // Helper function to generate unique codes
 const generateUniqueCode = (): string => {
@@ -488,24 +486,54 @@ export const generateSummary = (template: string, answer: string): string | null
 
 export const getSummariesForItem = async (entryId: number): Promise<string[]> => {
     return useModel(questionModel, async (qModel) => {
+        // First, check if this is a custom goal by checking if the track item belongs to the "Custom" category
+        const isCustomGoal = await qModel.runQuery(
+            `
+            SELECT COUNT(*) as count
+            FROM ${tables.TRACK_ITEM_ENTRY} tie
+            JOIN ${tables.TRACK_ITEM} ti ON tie.track_item_id = ti.id
+            JOIN ${tables.TRACK_CATEGORY} tc ON ti.category_id = tc.id
+            WHERE tie.id = ? AND tc.name = 'Custom'
+            `,
+            [entryId]
+        );
+        
+        const isCustom = isCustomGoal[0]?.count > 0;
+        
         const rows = await qModel.runQuery(
             `
-      SELECT q.summary_template, r.answer
+      SELECT q.summary_template, r.answer, r.updated_date
       FROM ${tables.QUESTION} q
       LEFT JOIN ${tables.TRACK_RESPONSE} r
         ON q.id = r.question_id AND r.track_item_entry_id = ?
       WHERE q.item_id = (SELECT item_id FROM ${tables.TRACK_ITEM_ENTRY} WHERE id = ?)
+      ORDER BY r.updated_date DESC
       `,
             [entryId, entryId]
         );
 
-        return rows
+        // Get the most recent updated date
+        let lastUpdatedDate: Date | null = null;
+        if (rows.length > 0 && rows[0].updated_date) {
+            lastUpdatedDate = new Date(rows[0].updated_date);
+        }
+
+        // For custom goals, only show the updated date
+        if (isCustom && lastUpdatedDate) {
+            const formattedDate = formatMMDDYYYY(lastUpdatedDate);
+            return [`Last updated: ${formattedDate}`];
+        }
+        
+        // For non-custom goals, generate summaries as usual without adding the date
+        const summaries = rows
             .map((row: { summary_template: string; answer: string; }) =>
                 row.summary_template && row.answer
                     ? generateSummary(row.summary_template, row.answer)
                     : null
             )
             .filter((s: any): s is string => !!s);
+        
+        return summaries;
     });
 };
 
