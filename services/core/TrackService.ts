@@ -11,6 +11,7 @@ import { TrackItemEntryModel } from '@/services/database/models/TrackItemEntryMo
 import { TrackItemModel } from '@/services/database/models/TrackItemModel';
 import { TrackResponseModel } from '@/services/database/models/TrackResponseModel';
 import { logger } from '@/services/logging/logger';
+import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
 // Helper function to generate unique codes
@@ -453,14 +454,9 @@ export const removeTrackItemFromDate = async (
 ): Promise<void> => {
     logger.debug('unlinkItemFromPatientDate called', { itemId, patientId, date });
 
-    await useModel(trackItemEntryModel, async (model) => {
+    await useModel(trackItemEntryModel, async (model: any) => {
         // 1. Mark all entries as deselected for this item and patient
-        await model.runQuery(`
-            UPDATE ${tables.TRACK_ITEM_ENTRY}
-            SET selected = 0, updated_date = ?
-            WHERE track_item_id = ?
-            AND patient_id = ?
-        `, [now, itemId, patientId]);
+        await model.updateByFields({ selected: 0, updated_date: now }, { patient_id: patientId, track_item_id: itemId });
     });
 
     logger.debug('unlinkItemFromPatientDate completed (deselected all future entries and past entries without responses)', { itemId, patientId });
