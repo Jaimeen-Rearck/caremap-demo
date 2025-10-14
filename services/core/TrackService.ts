@@ -1,4 +1,6 @@
+import 'react-native-get-random-values';
 import { QuestionCondition, QuestionType, TrackingFrequency } from '@/constants/trackTypes';
+import { v4 as uuidv4 } from 'uuid';
 import { CustomGoalParams, QuestionWithOptions, TrackCategoryWithItems, TrackCategoryWithSelectableItems, TrackItemWithProgress } from '@/services/common/types';
 import { getCurrentTimestamp } from '@/services/core/utils';
 import { useModel } from '@/services/database/BaseModel';
@@ -29,6 +31,7 @@ const trackItemEntryModel = new TrackItemEntryModel();
 const patientModel = new PatientModel();
 
 const now = getCurrentTimestamp();
+const generateUUID = () => uuidv4();
 
 // Date helpers (expects and returns MM-DD-YYYY as used in screens today)
 function parseMMDDYYYY(dateStr: string): Date {
@@ -620,13 +623,13 @@ export const isQuestionVisible = (
 
 export const addCustomGoal = async (params: CustomGoalParams): Promise<number> => {
     const { name, patientId, date, frequency, questions } = params;
-    logger.debug('addCustomGoal called', { name, patientId, date, frequency });
+    logger.debug("addCustomGoal called", { name, patientId, date, frequency });
 
     // Find the Custom category ID
     const customCategoryId = await useModel(trackCategoryModel, async (model) => {
-        const category = await model.getFirstByFields({ name: 'Custom' });
+        const category = await model.getFirstByFields({ name: "Custom" });
         if (!category) {
-            throw new Error('Custom category not found');
+            throw new Error("Custom category not found");
         }
         return category.id;
     });
@@ -641,7 +644,7 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
             code: trackItemCode,
             frequency: frequency as any,
             category_id: customCategoryId,
-            status: 'active' as any,
+            status: "active" as any,
             created_date: now,
             updated_date: now,
         });
@@ -662,7 +665,7 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
                 text: question.text,
                 type: question.type as any,
                 required: question.required ? 1 : 0,
-                status: 'active' as any,
+                status: "active" as any,
                 created_date: now,
                 updated_date: now,
             });
@@ -670,7 +673,7 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
         });
 
         // If question type is mcq, msq, or boolean, add default/options
-        if (question.type === QuestionType.BOOLEAN || question.type === 'boolean') {
+        if (question.type === QuestionType.BOOLEAN || question.type === "boolean") {
             await useModel(responseOptionModel, async (model) => {
                 await model.insert({
                     question_id: questionId,
@@ -690,10 +693,16 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
                 });
             });
         } else if (
-            question && (question.type === QuestionType.MCQ || question.type === QuestionType.MSQ || question.type === 'mcq' || question.type === 'msq') &&
+            question &&
+            (question.type === QuestionType.MCQ ||
+                question.type === QuestionType.MSQ ||
+                question.type === "mcq" ||
+                question.type === "msq") &&
             Array.isArray(question.options)
         ) {
-            const cleanOptions = question.options.filter((o) => !!o && o.trim().length > 0);
+            const cleanOptions = question.options.filter(
+                (o) => !!o && o.trim().length > 0
+            );
             if (cleanOptions.length > 0) {
                 await useModel(responseOptionModel, async (model) => {
                     for (let j = 0; j < cleanOptions.length; j++) {
@@ -702,7 +711,7 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
                             question_id: questionId,
                             code: generateUniqueCode(),
                             text: opt.trim(),
-                            status: 'active' as any,
+                            status: "active" as any,
                             created_date: now,
                             updated_date: now,
                         });
@@ -711,14 +720,22 @@ export const addCustomGoal = async (params: CustomGoalParams): Promise<number> =
             }
         }
     }
-    logger.debug('addCustomGoal completed', { trackItemId, name, patientId, date, frequency });
+    logger.debug("addCustomGoal completed", {
+        trackItemId,
+        name,
+        patientId,
+        date,
+        frequency,
+    });
     return trackItemId;
 };
 
 export const editCustomGoal = async (
     trackItemId: number,
+    patientId: number,
     updates: {
         name?: string;
+        frequency?: "daily" | "weekly" | "monthly";
         questions?: {
             id?: number;
             text: string;
@@ -728,7 +745,268 @@ export const editCustomGoal = async (
         }[];
     }
 ): Promise<void> => {
-    logger.debug('editCustomGoal called', { trackItemId, updates });
+    // Delegate to the enhanced version
+    return editCustomGoalEnhanced(trackItemId, patientId, updates);
+};
+
+// Retrieve questions (with options) for a custom goal (track item) to support editing UI
+export const getQuestionsForTrackItem = async (
+    trackItemId: number
+): Promise<
+    {
+        id: number;
+        text: string;
+        type: string;
+        required: boolean;
+        options: string[];
+    }[]
+> => {
+    return useModel(questionModel, async (qModel) => {
+        // Single query join to gather options
+        const rows = await qModel.runQuery(
+            `SELECT q.id, q.text, q.type, q.required, o.text AS option_text
+       FROM ${tables.QUESTION} q
+       LEFT JOIN ${tables.RESPONSE_OPTION} o
+         ON o.question_id = q.id AND o.status = 'active'
+       WHERE q.item_id = ? AND q.status = 'active'
+       ORDER BY q.id` as any,
+            [trackItemId]
+        );
+
+        const map = new Map<
+            number,
+            {
+                id: number;
+                text: string;
+                type: string;
+                required: boolean;
+                options: string[];
+            }
+        >();
+        for (const r of rows as any[]) {
+            if (!map.has(r.id)) {
+                map.set(r.id, {
+                    id: r.id,
+                    text: r.text,
+                    // some schemas store numeric types; ensure string
+                    type: String(r.type),
+                    required: !!r.required,
+                    options: [],
+                });
+            }
+            if (r.option_text) {
+                map.get(r.id)!.options.push(r.option_text);
+            }
+        }
+        return Array.from(map.values());
+    });
+};
+
+// Individual question CRUD operations
+export const addQuestionToTrackItem = async (
+    trackItemId: number,
+    question: {
+        text: string;
+        type: string;
+        required?: boolean;
+        options?: string[];
+    }
+): Promise<number> => {
+    logger.debug("addQuestionToTrackItem called", { trackItemId, question });
+
+    const questionId = await useModel(questionModel, async (model) => {
+        const result = await model.insert({
+            item_id: trackItemId,
+            code: generateUUID(),
+
+            text: question.text,
+            type: question.type as any,
+            required: question.required ? 1 : 0,
+            status: "active" as any,
+            created_date: now,
+            updated_date: now,
+        });
+        return result.lastInsertRowId;
+    });
+
+    // Add options if provided or if it's a boolean question
+    if (question.type === QuestionType.BOOLEAN || question.type === "boolean") {
+        await addOptionsToQuestion(questionId, [], question.type);
+    } else if (question.options && question.options.length > 0) {
+        await addOptionsToQuestion(questionId, question.options, question.type);
+    }
+
+    logger.debug("addQuestionToTrackItem completed", { trackItemId, questionId });
+    return questionId;
+};
+
+export const updateQuestion = async (
+    questionId: number,
+    updates: {
+        text?: string;
+        type?: string;
+        required?: boolean;
+        options?: string[];
+    }
+): Promise<void> => {
+    logger.debug("updateQuestion called", { questionId, updates });
+
+    // Update question fields
+    const updateFields: any = { updated_date: now };
+    if (updates.text !== undefined) updateFields.text = updates.text;
+    if (updates.type !== undefined) updateFields.type = updates.type;
+    if (updates.required !== undefined)
+        updateFields.required = updates.required ? 1 : 0;
+
+    await useModel(questionModel, async (model) => {
+        await model.updateByFields(updateFields, { id: questionId });
+    });
+
+    // Update options if provided
+    if (updates.options !== undefined) {
+        const questionType =
+            updates.type ||
+            (await useModel(questionModel, async (model) => {
+                const question = await model.getFirstByFields({ id: questionId });
+                return question?.type;
+            }));
+        await replaceQuestionOptions(questionId, updates.options, questionType);
+    }
+
+    logger.debug("updateQuestion completed", { questionId });
+};
+
+export const removeQuestion = async (questionId: number): Promise<void> => {
+    logger.debug("removeQuestion called", { questionId });
+
+    // Soft delete the question
+    await useModel(questionModel, async (model) => {
+        await model.updateByFields(
+            { status: "inactive" as any, updated_date: now },
+            { id: questionId }
+        );
+    });
+
+    // Soft delete associated options
+    await useModel(responseOptionModel, async (model) => {
+        await model.updateByFields(
+            { status: "inactive" as any, updated_date: now },
+            { question_id: questionId }
+        );
+    });
+
+    logger.debug("removeQuestion completed", { questionId });
+};
+
+export const addOptionsToQuestion = async (
+    questionId: number,
+    options: string[],
+    questionType?: string
+): Promise<number[]> => {
+    logger.debug("addOptionsToQuestion called", {
+        questionId,
+        options,
+        questionType,
+    });
+
+    const optionIds: number[] = [];
+
+    await useModel(responseOptionModel, async (model) => {
+        // Handle boolean questions specially
+        if (questionType === QuestionType.BOOLEAN || questionType === "boolean") {
+            const yesResult = await model.insert({
+                question_id: questionId,
+                code: generateUUID(),
+                text: "Yes",
+                status: "active" as any,
+                created_date: now,
+                updated_date: now,
+            });
+            optionIds.push(yesResult.lastInsertRowId);
+
+            const noResult = await model.insert({
+                question_id: questionId,
+                code: generateUUID(),
+                text: "No",
+                status: "active" as any,
+                created_date: now,
+                updated_date: now,
+            });
+            optionIds.push(noResult.lastInsertRowId);
+        } else {
+            // Handle other question types with custom options
+            for (let i = 0; i < options.length; i++) {
+                const option = options[i];
+                if (!option || !option.trim()) continue;
+
+                const result = await model.insert({
+                    question_id: questionId,
+                    code: generateUUID(),
+
+                    text: option.trim(),
+                    status: "active" as any,
+                    created_date: now,
+                    updated_date: now,
+                });
+                optionIds.push(result.lastInsertRowId);
+            }
+        }
+    });
+
+    logger.debug("addOptionsToQuestion completed", { questionId, optionIds });
+    return optionIds;
+};
+
+export const replaceQuestionOptions = async (
+    questionId: number,
+    newOptions: string[],
+    questionType?: string
+): Promise<void> => {
+    logger.debug("replaceQuestionOptions called", {
+        questionId,
+        newOptions,
+        questionType,
+    });
+
+    // Soft delete existing options
+    await useModel(responseOptionModel, async (model) => {
+        await model.updateByFields(
+            { status: "inactive" as any, updated_date: now },
+            { question_id: questionId }
+        );
+    });
+
+    // Add new options based on question type
+    if (questionType === QuestionType.BOOLEAN || questionType === "boolean") {
+        await addOptionsToQuestion(questionId, [], questionType);
+    } else if (newOptions.length > 0) {
+        await addOptionsToQuestion(questionId, newOptions, questionType);
+    }
+
+    logger.debug("replaceQuestionOptions completed", { questionId });
+};
+
+// Enhanced editCustomGoal with proper question management
+export const editCustomGoalEnhanced = async (
+    trackItemId: number,
+    patientId: number,
+    updates: {
+        name?: string;
+        frequency?: "daily" | "weekly" | "monthly";
+        questions?: {
+            id?: number;
+            text: string;
+            type: string;
+            required?: boolean;
+            options?: string[];
+        }[];
+    }
+): Promise<void> => {
+    logger.debug("editCustomGoalEnhanced called", {
+        trackItemId,
+        patientId,
+        updates,
+    });
 
     // Update name if provided
     if (updates.name) {
@@ -740,21 +1018,41 @@ export const editCustomGoal = async (
         });
     }
 
-    // Handle questions
-    if (updates.questions && updates.questions.length > 0) {
+    // Update frequency if provided
+    if (updates.frequency) {
+        await useModel(trackItemModel, async (model) => {
+            await model.updateByFields(
+                { frequency: updates.frequency as any, updated_date: now },
+                { id: trackItemId }
+            );
+        });
+    }
+
+    // Handle questions with proper CRUD operations
+    if (updates.questions) {
+        // Get existing questions
+        const existingQuestions = await getQuestionsForTrackItem(trackItemId);
+        const existingQuestionIds = new Set(existingQuestions.map((q) => q.id));
+        const updatedQuestionIds = new Set(
+            updates.questions.filter((q) => q.id).map((q) => q.id!)
+        );
+
+        // Remove questions that are no longer in the update
+        for (const existingId of existingQuestionIds) {
+            if (!updatedQuestionIds.has(existingId)) {
+                await removeQuestion(existingId);
+            }
+        }
+
+        // Process each question in the update
         for (const q of updates.questions) {
-            if (q.id) {
+            if (q.id && existingQuestionIds.has(q.id)) {
                 // Update existing question
-                await useModel(questionModel, async (model) => {
-                    await model.updateByFields(
-                        {
-                            text: q.text,
-                            type: q.type as any,
-                            required: q.required ? 1 : 0,
-                            updated_date: now,
-                        },
-                        { id: q.id }
-                    );
+                await updateQuestion(q.id, {
+                    text: q.text,
+                    type: q.type,
+                    required: q.required,
+                    options: q.options,
                 });
 
                 if (q.options) {
@@ -775,64 +1073,63 @@ export const editCustomGoal = async (
                     });
                 }
             } else {
-                // Insert new question
-                const questionId = await useModel(questionModel, async (model) => {
-                    const result = await model.insert({
-                        code: `Q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                        item_id: trackItemId,
-                        text: q.text,
-                        type: q.type as any,
-                        required: q.required ? 1 : 0,
-                        status: 'active' as any,
-                        created_date: now,
-                        updated_date: now,
-                    });
-                    return result.lastInsertRowId;
+                // Add new question
+                await addQuestionToTrackItem(trackItemId, {
+                    text: q.text,
+                    type: q.type,
+                    required: q.required,
+                    options: q.options,
                 });
-
-                if (q.options) {
-                    await useModel(responseOptionModel, async (model) => {
-                        const opts = q.options ?? [];
-                        for (const opt of opts) {
-                            await model.insert({
-                                code: `RESP_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                                question_id: questionId,
-                                text: opt.trim(),
-                                status: 'active' as any,
-                                created_date: now,
-                                updated_date: now,
-                            });
-                        }
-                    });
-                }
             }
         }
     }
 
-    logger.debug('editCustomGoal completed', { trackItemId });
+    logger.debug("editCustomGoalEnhanced completed", { trackItemId });
 };
 
 export const removeCustomGoal = async (
     trackItemId: number,
     patientId: number
 ): Promise<void> => {
-    logger.debug('removeCustomGoal called', { trackItemId, patientId });
+    logger.debug("removeCustomGoal called", { trackItemId, patientId });
 
     // Deactivate the track item itself
     await useModel(trackItemModel, async (model) => {
         await model.updateByFields(
-            { status: 'inactive' as any, updated_date: now },
+            { status: "inactive" as any, updated_date: now },
             { id: trackItemId }
         );
+    });
+
+    // Deactivate all questions for this track item
+    await useModel(questionModel, async (model) => {
+        await model.updateByFields(
+            { status: "inactive" as any, updated_date: now },
+            { item_id: trackItemId }
+        );
+    });
+
+    // Deactivate all options for questions of this track item
+    await useModel(responseOptionModel, async (model) => {
+        const questionsResult = await useModel(questionModel, async (qModel) => {
+            return await qModel.getByFields({ item_id: trackItemId });
+        });
+
+        for (const question of questionsResult) {
+            await model.updateByFields(
+                { status: "inactive" as any, updated_date: now },
+                { question_id: question.id }
+            );
+        }
     });
 
     // Deactivate linked entries for this patient
     await useModel(trackItemEntryModel, async (model) => {
         await model.updateByFields(
-            { selected: 0 as any, updated_date: now },
+            { selected: 0, updated_date: now },
             { track_item_id: trackItemId, patient_id: patientId }
         );
     });
 
-    logger.debug('removeCustomGoal completed', { trackItemId, patientId });
+    logger.debug("removeCustomGoal completed", { trackItemId, patientId });
 };

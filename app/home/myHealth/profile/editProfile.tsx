@@ -46,7 +46,7 @@ export default function EditProfilePage() {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const showToast = useCustomToast();
   useEffect(() => {
-    logger.debugTrunc("Edit Patient: ", patient);
+    logger.debug("Edit Patient: ", patient);
     if (!patient) {
       router.replace(ROUTES.MY_HEALTH);
       return;
@@ -70,23 +70,24 @@ export default function EditProfilePage() {
     setDatePickerVisibility(false);
   };
 
+ 
   const handleImagePress = () => {
     setShowImageDialog(true);
   };
   const handlePickImage = async () => {
     const result = await pickImageFromLibrary();
-
+    
     if (result.error) {
       showToast({
         title: "Error",
-        description: `Failed to pick image. ${result.error}`,
+        description: "Image upload failed",
         action: "error",
       });
       return;
     }
 
     if (result.base64Image) {
-      setNewPatient((prev) =>
+      setNewPatient(prev => 
         prev ? { ...prev, profile_picture: result.base64Image } : prev
       );
     }
@@ -151,8 +152,9 @@ export default function EditProfilePage() {
         </Text>
 
         <View className="flex-row mb-5 items-center justify-start px-4 ">
+          
           <TouchableOpacity onPress={handleImagePress}>
-            <Avatar size="xl">
+           <Avatar size="xl">
               {patient?.profile_picture ? (
               <AvatarImage source={{ uri: newPatient?.profile_picture }} />
             ) : (
@@ -160,24 +162,23 @@ export default function EditProfilePage() {
                 <Icon as={User} size="xl" className="text-gray-500" />
               </View>
             )}
-              {/* <AvatarImage source={{ uri: newPatient?.profile_picture }} /> */}
               <View className="absolute bottom-0 right-0 bg-white rounded-full p-1 ">
                 <Icon as={Camera} size="sm" className="text-black" />
               </View>
             </Avatar>
           </TouchableOpacity>
           <View className="ml-16">
-            <Text className="text-xl text-white font-semibold">
+            <Text className="text-lg text-white font-semibold">
               {getDisplayName(newPatient)}
             </Text>
-            <Text className="text-white font-semibold">
+            <Text className="text-white">
               Age:{" "}
               {calculateAge(patient?.date_of_birth)
                 ? `${calculateAge(patient?.date_of_birth)} years`
                 : "Not set"}
             </Text>
 
-            <Text className="text-white font-semibold">
+            <Text className="text-white">
               Weight:{" "}
               {patient?.weight
                 ? `${patient.weight} ${newPatient.weight_unit}`

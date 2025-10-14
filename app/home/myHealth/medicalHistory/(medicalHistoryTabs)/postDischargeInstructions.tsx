@@ -1,34 +1,34 @@
-import React, { useContext, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  TextInput,
-  ScrollView,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Textarea, TextareaInput } from "@/components/ui/textarea";
-import palette from "@/utils/theme/color";
-import {
-  createDischargeInstruction,
-  getDischargeInstructionsByPatientId,
-  updateDischargeInstruction,
-  deleteDischargeInstruction,
-} from "@/services/core/DischargeInstructionService";
-import { PatientContext } from "@/context/PatientContext";
+import ActionPopover from "@/components/shared/ActionPopover";
 import { CustomAlertDialog } from "@/components/shared/CustomAlertDialog";
 import Header from "@/components/shared/Header";
-import ActionPopover from "@/components/shared/ActionPopover";
 import { useCustomToast } from "@/components/shared/useCustomToast";
-import { DischargeInstruction } from "@/services/database/migrations/v1/schema_v1";
-import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { CalendarDaysIcon, Icon } from "@/components/ui/icon";
-import { KeyboardAvoidingView, Platform } from "react-native";
+import { Textarea, TextareaInput } from "@/components/ui/textarea";
+import { PatientContext } from "@/context/PatientContext";
+import {
+  createDischargeInstruction,
+  deleteDischargeInstruction,
+  getDischargeInstructionsByPatientId,
+  updateDischargeInstruction,
+} from "@/services/core/DischargeInstructionService";
+import { DischargeInstruction } from "@/services/database/migrations/v1/schema_v1";
 import { logger } from "@/services/logging/logger";
-import { router } from "expo-router";
-import { Divider } from "@/components/ui/divider";
-import { CustomButton } from "@/components/shared/CustomButton";
+import palette from "@/utils/theme/color";
+import React, { useContext, useEffect, useState } from "react";
+import {
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PostDischargeInstructions() {
   const { patient } = useContext(PatientContext);
@@ -59,7 +59,7 @@ export default function PostDischargeInstructions() {
 
       setPatientDischargeInstructions(getDischargeInstructions);
     } catch (e) {
-      logger.debug(String(e));
+      logger.debug(`${e}`);
     }
   }
 
@@ -123,26 +123,20 @@ export default function PostDischargeInstructions() {
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
-      <Header
-        title="Post Discharge Instruction"
-        right={
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-white font-medium">Cancel</Text>
-          </TouchableOpacity>
-        }
-      />
+      <Header title="Post Discharge Instruction" />
 
-      <View className="px-5 pt-5 flex-1">
+      <View className="px-6 pt-8 flex-1">
         <View className="flex-1">
           {/* Heading*/}
           <Text
-            className="text-xl font-semibold"
+            className="text-lg font-semibold"
             style={{ color: palette.heading }}
           >
             Discharge Summary
           </Text>
 
-          <Divider className="bg-gray-300 my-3" />
+          {/* hr */}
+          <View className="h-px bg-gray-300 my-3" />
 
           <View className="flex-1">
             <FlatList
@@ -240,13 +234,19 @@ export default function PostDischargeInstructions() {
           </View>
         </View>
 
-        <Divider className="bg-gray-300 mb-2" />
+        {/* hr */}
+        <View className="h-px bg-gray-300 mb-2" />
 
         {/* Add Button */}
-        <CustomButton
-          title="Add Post Discharge Details"
+        <TouchableOpacity
+          className="rounded-md py-3 items-center mt-1"
           onPress={() => setShowForm(true)}
-        />
+          style={{ backgroundColor: palette.primary }}
+        >
+          <Text className="text-white font-medium text-lg">
+            Add Post Discharge Details
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <CustomAlertDialog
@@ -305,129 +305,123 @@ function AddUpdateFormPage({
     setShowDatePicker(false);
   };
 
-  const isDisabled = dischargeSummary.trim().length === 0 || !dateOfDischarge;
-
   const handleSave = () => {
-    if (isDisabled) return;
-    handleAddUpdate({
-      ...(editingItem?.id ? { id: editingItem.id } : {}),
-      summary: dischargeSummary.trim(),
-      discharge_date: dateOfDischarge,
-      details: dischargeDesc.trim(),
-    } as DischargeInstruction);
+    if (dischargeSummary.trim() && dateOfDischarge) {
+      handleAddUpdate({
+        ...(editingItem?.id ? { id: editingItem.id } : {}),
+        summary: dischargeSummary.trim(),
+        discharge_date: dateOfDischarge,
+        details: dischargeDesc.trim(),
+      } as DischargeInstruction);
+    }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      {/* Header */}
-      <Header
-        title="Post Discharge Instruction"
-        right={
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-white font-medium">Cancel</Text>
-          </TouchableOpacity>
-        }
-        onBackPress={onClose}
-      />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        className="bg-white"
-        // behavior={Platform.OS === "ios" ? "padding" : "height"}
-        behavior={"padding"}
-        // keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-      >
-        <ScrollView
-          className="px-5 pt-5 flex-1"
-          contentContainerStyle={{
-            paddingBottom: 30,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={true}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView className="flex-1 bg-white">
+        {/* Header */}
+        <Header title="Post Discharge Instruction" onBackPress={onClose} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
         >
-          <View className="flex-1">
-            <Text
-              className="text-xl font-medium mb-3"
-              style={{ color: palette.heading }}
-            >
-              {editingItem
-                ? "Update discharge summary"
-                : "Add discharge summary"}
-            </Text>
-            {/* Discharge summary */}
-            <View className="mb-4">
-              <Text className="text-gray-600 text-base mb-1">Summary *</Text>
-              <TextInput
-                value={dischargeSummary}
-                onChangeText={setDischargeSummary}
-                placeholder="Enter discharge summary"
-                className="border border-gray-300 rounded-md px-3 py-3 text-base"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
-            {/* Date of discharge*/}
-            <View className="mb-4">
-              <Text className="text-gray-600 text-base mb-1">
-                Date of discharge *
-              </Text>
-              <TouchableOpacity
-                className="border border-gray-300 rounded-md px-3"
-                onPress={() => setShowDatePicker(true)}
-              >
-                <View className="flex-row items-center">
-                  <TextInput
-                    value={dateOfDischarge ? formatDate(dateOfDischarge) : ""}
-                    placeholder="MM-DD-YY"
-                    className="flex-1 text-base"
-                    editable={false}
-                    pointerEvents="none"
-                  />
-                  <Icon
-                    as={CalendarDaysIcon}
-                    className="text-typography-500 m-1 w-5 h-5"
-                  />
-                </View>
-              </TouchableOpacity>
-              <DateTimePickerModal
-                isVisible={showDatePicker}
-                mode="date"
-                onConfirm={handleDateConfirm}
-                onCancel={() => setShowDatePicker(false)}
-                // minimumDate={new Date()} // Prevent selecting past dates
-              />
-            </View>
-            {/* Details */}
-            <Text className="text-gray-500 mb-1 text-base">Description</Text>
-            <Textarea
-              size="md"
-              isReadOnly={false}
-              isInvalid={false}
-              isDisabled={false}
-              className="w-full"
-            >
-              <TextareaInput
-                placeholder="Enter description"
-                style={{ textAlignVertical: "top", fontSize: 16 }}
-                value={dischargeDesc}
-                onChangeText={setDischargeDesc}
-              />
-            </Textarea>
-          </View>
-        </ScrollView>
-
-        {/* Save button */}
-        <View className="px-5">
-          <CustomButton
-            title={editingItem ? "Update" : "Save"}
-            onPress={() => {
-              handleSave();
-              onClose(); // Go back to list
+          <ScrollView
+            className="px-6 pt-8 pb-0 flex-1"
+            contentContainerStyle={{
+              paddingBottom: 48,
             }}
-            disabled={isDisabled}
-          />
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+          >
+            <View className="flex-1">
+              <Text
+                className="text-lg font-medium mb-3"
+                style={{ color: palette.heading }}
+              >
+                {editingItem
+                  ? "Update discharge summary"
+                  : "Add discharge summary"}
+              </Text>
+              {/* Discharge summary */}
+              <View className="mb-4">
+                <Text className="text-gray-600 text-sm mb-1">Summary</Text>
+                <TextInput
+                  value={dischargeSummary}
+                  onChangeText={setDischargeSummary}
+                  placeholder="Enter discharge summary"
+                  className="border border-gray-300 rounded-md px-3 py-3 text-base"
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+              {/* Date of discharge*/}
+              <View className="mb-4">
+                <Text className="text-gray-600 text-sm mb-1">
+                  Date of discharge
+                </Text>
+                <TouchableOpacity
+                  className="border border-gray-300 rounded-md px-3"
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <View className="flex-row items-center">
+                    <TextInput
+                      value={dateOfDischarge ? formatDate(dateOfDischarge) : ""}
+                      placeholder="MM-DD-YY"
+                      className="flex-1 text-base"
+                      editable={false}
+                      pointerEvents="none"
+                    />
+                    <Icon
+                      as={CalendarDaysIcon}
+                      className="text-typography-500 m-1 w-5 h-5"
+                    />
+                  </View>
+                </TouchableOpacity>
+                <DateTimePickerModal
+                  isVisible={showDatePicker}
+                  mode="date"
+                  onConfirm={handleDateConfirm}
+                  onCancel={() => setShowDatePicker(false)}
+                  // minimumDate={new Date()} // Prevent selecting past dates
+                />
+              </View>
+              {/* Details */}
+              <Text className="text-gray-500 mb-1 text-sm">Description</Text>
+              <Textarea
+                size="md"
+                isReadOnly={false}
+                isInvalid={false}
+                isDisabled={false}
+                className="w-full"
+              >
+                <TextareaInput
+                  placeholder="Enter description"
+                  style={{ textAlignVertical: "top", fontSize: 16 }}
+                  value={dischargeDesc}
+                  onChangeText={setDischargeDesc}
+                />
+              </Textarea>
+            </View>
+            {/* Save button */}
+          </ScrollView>
+          <View className="px-6 mb-4">
+            <TouchableOpacity
+              className="py-3 rounded-md mt-3"
+              style={{ backgroundColor: palette.primary }}
+              onPress={() => {
+                handleSave();
+                onClose(); // Go back to list
+              }}
+            >
+              <Text className="text-white font-bold text-center">
+                {editingItem ? "Update" : "Save"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }

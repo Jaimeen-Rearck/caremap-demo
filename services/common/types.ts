@@ -50,7 +50,6 @@ export interface QuestionWithOptions {
   options: ResponseOption[];
   existingResponse?: TrackResponse;
 }
-
 export interface CustomGoalQuestion {
   text: string;
   type: string;
@@ -63,7 +62,7 @@ export interface CustomGoalParams {
   userId: string;
   patientId: number;
   date: string;
-  frequency: TrackingFrequency;
+  frequency: "daily" | "weekly" | "monthly";
   code: string;
   questions: CustomGoalQuestion[];
 }

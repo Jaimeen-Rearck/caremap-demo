@@ -4,9 +4,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Keyboard,
+  TouchableWithoutFeedback,
   FlatList,
-  ScrollView,
-  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft } from "lucide-react-native";
@@ -25,8 +25,6 @@ import {
   updatePatientMedication,
   deletePatientMedication,
 } from "@/services/core/PatientMedicationService";
-import { router } from "expo-router";
-import { CustomButton } from "@/components/shared/CustomButton";
 
 export default function MedicationsScreen() {
   const { patient } = useContext(PatientContext);
@@ -95,7 +93,7 @@ export default function MedicationsScreen() {
 
   if (showForm) {
     return (
-      <MedicationForm
+      <EmergencyCareForm
         onClose={() => {
           setShowForm(false);
           setEditingItem(null);
@@ -108,43 +106,37 @@ export default function MedicationsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <Header
-        title="Medications"
-        right={
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-white font-medium">Cancel</Text>
-          </TouchableOpacity>
-        }
-      />
+      <Header title="Medications" />
 
-      <View className="px-5 pt-5 bg-white flex-1">
-        <Text
+      <View className="p-4 bg-white flex-1">
+          <Text
           style={{ color: palette.heading }}
-          className="text-xl font-semibold mb-2"
+          className="text-lg font-semibold mb-2"
         >
           Medications (Linked Health System)
         </Text>
-        <Text className="text-gray-500 mb-3 text-lg">
+        <Text className="text-gray-500 mb-3">
           Select ones to review with your care team{" "}
         </Text>
-        <Divider className="bg-gray-300" />
-        <Text
+         <Divider className="bg-gray-300" />
+         <Text
           style={{ color: palette.heading }}
-          className="text-xl font-semibold mt-5"
+          className="text-lg font-semibold mb-4"
         >
-          List your active medications
+         List your active medications
         </Text>
-        <Divider className="bg-gray-300 my-3" />
+        <Divider className="bg-gray-300" />
 
         <FlatList
+        className="mt-2"
           data={medicationList}
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={true}
           renderItem={({ item }) => (
             <View className="flex-row items-start border border-gray-300 rounded-xl p-4 mb-4">
               <View className="ml-3 flex-1">
-                <Text className="font-semibold text-lg">{item.name}</Text>
-                <Text className="text-gray-500 text-base mt-1">
+                <Text className="font-semibold text-base">{item.name}</Text>
+                <Text className="text-gray-500 text-sm mt-1">
                   {item.details}
                 </Text>
               </View>
@@ -162,17 +154,25 @@ export default function MedicationsScreen() {
             </View>
           )}
           ListEmptyComponent={
-            <Text className="text-gray-500 text-center my-4 text-lg">
+            <Text className="text-gray-500 text-center my-4">
               No Medication found.
+             
             </Text>
           }
         />
 
-        <Divider className="bg-gray-300 mb-2" />
-        <CustomButton
-          title="Add New Medication"
+        <Divider className="bg-gray-300" />
+
+        <TouchableOpacity
+          style={{ backgroundColor: palette.primary }}
+          className="py-3 rounded-lg mt-2"
           onPress={() => setShowForm(true)}
-        />
+        >
+          <Text className="text-white font-bold text-center">
+            
+             Add current medications
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <CustomAlertDialog
@@ -187,6 +187,12 @@ export default function MedicationsScreen() {
             ? `Are you sure you want to delete \"${itemToDelete.name}\"?`
             : "Are you sure you want to delete this item?"
         }
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonProps={{
+          style: { backgroundColor: palette.primary, marginLeft: 8 },
+        }}
+        cancelButtonProps={{ variant: "outline" }}
         onConfirm={async () => {
           if (itemToDelete) {
             await deletePatientMedication(itemToDelete.id);
@@ -207,7 +213,7 @@ export default function MedicationsScreen() {
   );
 }
 
-function MedicationForm({
+function EmergencyCareForm({
   onClose,
   onSave,
   editingItem,
@@ -231,36 +237,29 @@ function MedicationForm({
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <Header
-        title="Medications"
-        right={
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text className="text-white font-medium">Cancel</Text>
-          </TouchableOpacity>
-        }
-        onBackPress={onClose}
-      />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        className="bg-white"
-        // behavior={Platform.OS === "ios" ? "padding" : "height"}
-        behavior={"padding"}
-        // keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-      >
-        <ScrollView
-          className="px-5 pt-5 flex-1"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView className="flex-1 bg-white">
+        <View
+          className="py-3 flex-row items-center"
+          style={{ backgroundColor: palette.primary }}
         >
-          <Text
-            className="text-xl font-medium mb-3"
-            style={{ color: palette.heading }}
-          >
+          <TouchableOpacity onPress={onClose} className="p-2 ml-2">
+            <ChevronLeft color="white" size={24} />
+          </TouchableOpacity>
+          <Text className="text-xl text-white font-bold ml-4">
             {editingItem ? "Edit" : "Add"} Medications
           </Text>
+        </View>
 
-          <Text className="text-base mb-1 text-gray-600">Medications Name</Text>
+        <View className="px-6 py-8">
+          <Text
+            className="text-lg font-medium mb-3"
+            style={{ color: palette.heading }}
+          >
+            {editingItem ? "Edit" : "Add"} Medications 
+          </Text>
+
+          <Text className="text-sm mb-1 text-gray-600">Medications Name</Text>
           <TextInput
             className="border border-gray-300 rounded-lg p-3 mb-4"
             placeholder="Enter medication name"
@@ -268,9 +267,7 @@ function MedicationForm({
             onChangeText={setName}
           />
 
-          <Text className="text-base mb-1 text-gray-600">
-            Medications detail
-          </Text>
+          <Text className="text-sm mb-1 text-gray-600">Medications detail</Text>
           <TextInput
             className="border border-gray-300 rounded-lg p-3 mb-4"
             placeholder="Enter guidance steps"
@@ -280,15 +277,17 @@ function MedicationForm({
             numberOfLines={4}
             textAlignVertical="top"
           />
-        </ScrollView>
-        <View className="px-5">
-          <CustomButton
-            title={editingItem ? "Update" : "Save"}
+
+          <TouchableOpacity
+            className={`py-3 rounded-lg ${isSaveDisabled ? "opacity-50" : ""}`}
             disabled={isSaveDisabled}
+            style={{ backgroundColor: palette.primary }}
             onPress={handleSave}
-          />
+          >
+            <Text className="text-white font-bold text-center">Save</Text>
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
