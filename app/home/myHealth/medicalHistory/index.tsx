@@ -1,17 +1,18 @@
 import { View, Text, Image, TouchableOpacity } from "react-native";
 import { Divider } from "@/components/ui/divider";
-// import { Badge, BadgeText } from "@/components/ui/badge";
+import { Badge, BadgeText } from "@/components/ui/badge";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Route, router } from "expo-router";
 import { ROUTES } from "@/utils/route";
 import Header from "@/components/shared/Header";
+import palette from "@/utils/theme/color";
 
 function medicalHistory() {
   const medicalTiles = [
     {
       name: "Hospitalization",
       count: "3",
-      icon: require("@/assets/images/hospitalization.png"),
+      icon: require("@/assets/images/medicalOverview.png"),
       link: ROUTES.HOSPITALIZATION,
     },
     {
@@ -31,13 +32,7 @@ function medicalHistory() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <Header title=" Medical History" 
-       right={
-                <TouchableOpacity onPress={() => router.back()}>
-                  <Text className="text-white font-medium">Cancel</Text>
-                </TouchableOpacity>
-              }
-              />
+      <Header title=" Medical History" />
 
       <View className="p-4">
         <View className=" rounded-lg">
@@ -57,13 +52,13 @@ function medicalHistory() {
                 </View>
 
                 <View className="flex-row items-center">
-                  {/* {tile.count && (
+                  {tile.count && (
                     <Badge 
                      style={{ backgroundColor: palette.primary }}
                     className="rounded-full mr-2">
                       <BadgeText className="text-white">{tile.count}</BadgeText>
                     </Badge>
-                  )} */}
+                  )}
                   <Image
                     source={require("@/assets/images/arrow.png")}
                     className="w-4 h-4"

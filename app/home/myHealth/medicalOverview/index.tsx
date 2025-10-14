@@ -1,7 +1,8 @@
 import { View, Text, Image, TouchableOpacity } from "react-native";
 import { Divider } from "@/components/ui/divider";
-// import { Badge, BadgeText } from "@/components/ui/badge";
+import { Badge, BadgeText } from "@/components/ui/badge";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ChevronLeft } from "lucide-react-native";
 import { Route, router } from "expo-router";
 import { ROUTES } from "@/utils/route";
 import Header from "@/components/shared/Header";
@@ -12,19 +13,19 @@ function medicalOverview() {
     {
       name: "Snapshot",
       count: "3",
-      icon: require("@/assets/images/snapshot.png"),
+      icon: require("@/assets/images/medicalOverview.png"),
       link: ROUTES.SNAPSHOT,
     },
     {
       name: "Medical Conditions",
       count: "2",
-      icon: require("@/assets/images/medical-condition.png"),
+      icon: require("@/assets/images/emergencyCare.png"),
       link: ROUTES.MEDICAL_CONDITIONS,
     },
     {
       name: "Medical Equipments",
       count: "14",
-      icon: require("@/assets/images/medical-equipment.png"),
+      icon: require("@/assets/images/allergies.png"),
       link: ROUTES.MEDICAL_EQUIPMENTS,
     },
     {
@@ -34,19 +35,12 @@ function medicalOverview() {
       link: ROUTES.HIGH_LEVEL_GOALS,
     },
 
-    
+   
   ];
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <Header title=" Medical Overview" 
-      right={
-                      <TouchableOpacity onPress={() => router.back()}>
-                        <Text className="text-white font-medium">Cancel</Text>
-                      </TouchableOpacity>
-                    }
-                    />
-
+      <Header title=" Medical Overview" />
       <View className="p-4">
         <View className=" rounded-lg">
           {medicalTiles.map((tile, index) => (
@@ -65,13 +59,14 @@ function medicalOverview() {
                 </View>
 
                 <View className="flex-row items-center">
-                  {/* {tile.count && (
+                  {tile.count && (
                     <Badge
-                   style={{ backgroundColor: palette.primary }}
-                     className="rounded-full mr-2">
+                      style={{ backgroundColor: palette.primary }}
+                      className=" rounded-full mr-2"
+                    >
                       <BadgeText className="text-white">{tile.count}</BadgeText>
                     </Badge>
-                  )} */}
+                  )}
                   <Image
                     source={require("@/assets/images/arrow.png")}
                     className="w-4 h-4"
