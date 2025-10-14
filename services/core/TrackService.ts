@@ -13,6 +13,13 @@ import { TrackItemEntryModel } from '@/services/database/models/TrackItemEntryMo
 import { TrackItemModel } from '@/services/database/models/TrackItemModel';
 import { TrackResponseModel } from '@/services/database/models/TrackResponseModel';
 import { logger } from '@/services/logging/logger';
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
+
+// Helper function to generate unique codes
+const generateUniqueCode = (): string => {
+    return uuidv4();
+};
 
 // Single shared instance of models
 const trackCategoryModel = new TrackCategoryModel();
@@ -453,7 +460,6 @@ export const removeTrackItemFromDate = async (
     await useModel(trackItemEntryModel, async (model: any) => {
         // 1. Mark all entries as deselected for this item and patient
         await model.updateByFields({ selected: 0, updated_date: now }, { patient_id: patientId, track_item_id: itemId });
-
     });
 
     logger.debug('unlinkItemFromPatientDate completed (deselected all future entries and past entries without responses)', { itemId, patientId });
@@ -611,9 +617,11 @@ export const isQuestionVisible = (
     }
 };
 
-export const addCustomGoal = async (
-    params: CustomGoalParams
-): Promise<number> => {
+/*
+ Custom Goals methods :
+*/
+
+export const addCustomGoal = async (params: CustomGoalParams): Promise<number> => {
     const { name, patientId, date, frequency, questions } = params;
     logger.debug("addCustomGoal called", { name, patientId, date, frequency });
 
@@ -627,7 +635,7 @@ export const addCustomGoal = async (
     });
 
     // Generate a unique code for this track item
-    const trackItemCode = generateUUID();
+    const trackItemCode = generateUniqueCode();
 
     // Create a new track item for the custom goal
     const trackItemId = await useModel(trackItemModel, async (model) => {
@@ -648,7 +656,7 @@ export const addCustomGoal = async (
         const question = questions[i];
 
         // Generate a unique code for each question
-        const questionCode = generateUUID();
+        const questionCode = generateUniqueCode();
 
         const questionId = await useModel(questionModel, async (model) => {
             const result = await model.insert({
@@ -669,17 +677,17 @@ export const addCustomGoal = async (
             await useModel(responseOptionModel, async (model) => {
                 await model.insert({
                     question_id: questionId,
-                    code: generateUUID(),
-                    text: "Yes",
-                    status: "active" as any,
+                    code: generateUniqueCode(),
+                    text: 'Yes',
+                    status: 'active' as any,
                     created_date: now,
                     updated_date: now,
                 });
                 await model.insert({
                     question_id: questionId,
-                    code: generateUUID(),
-                    text: "No",
-                    status: "active" as any,
+                    code: generateUniqueCode(),
+                    text: 'No',
+                    status: 'active' as any,
                     created_date: now,
                     updated_date: now,
                 });
@@ -701,7 +709,7 @@ export const addCustomGoal = async (
                         const opt = cleanOptions[j];
                         await model.insert({
                             question_id: questionId,
-                            code: generateUUID(),
+                            code: generateUniqueCode(),
                             text: opt.trim(),
                             status: "active" as any,
                             created_date: now,
@@ -1046,6 +1054,24 @@ export const editCustomGoalEnhanced = async (
                     required: q.required,
                     options: q.options,
                 });
+
+                if (q.options) {
+                    // Replace options
+                    await useModel(responseOptionModel, async (model) => {
+                        await model.deleteByFields({ question_id: q.id as any });
+                        const opts = q.options ?? [];
+                        for (const opt of opts) {
+                            await model.insert({
+                                code: generateUniqueCode(),
+                                question_id: q.id,
+                                text: opt.trim(),
+                                status: 'active' as any,
+                                created_date: now,
+                                updated_date: now,
+                            });
+                        }
+                    });
+                }
             } else {
                 // Add new question
                 await addQuestionToTrackItem(trackItemId, {
