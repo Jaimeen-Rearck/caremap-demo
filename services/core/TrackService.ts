@@ -721,7 +721,7 @@ export const isQuestionVisible = (
         }
 
     } catch (err) {
-        console.warn("Invalid display_condition JSON:", q.display_condition, err);
+        console.debug("Invalid display_condition JSON:", q.display_condition, err);
         result = true;
     }
 
